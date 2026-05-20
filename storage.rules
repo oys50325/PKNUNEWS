@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /issues/{issueId}/{fileName} {
+      allow read: if true;
+      allow write, delete: if request.auth != null
+        && request.resource.size < 350 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /temp/{userId}/{fileName} {
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

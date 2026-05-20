@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "users": {
+      ".read": true,
+      ".write": true
+    },
+    "newsletters": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
