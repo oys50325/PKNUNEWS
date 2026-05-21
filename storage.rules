@@ -5,7 +5,7 @@ service firebase.storage {
     match /issues/{issueId}/{fileName} {
       allow read: if true;
       allow write, delete: if request.auth != null
-        && request.resource.size < 350 * 1024
+        && request.resource.size < 900 * 1024
         && request.resource.contentType.matches('image/.*');
     }
 

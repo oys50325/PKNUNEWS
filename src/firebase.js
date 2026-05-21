@@ -123,6 +123,12 @@ export async function publishIssue(issue) {
     });
   }
 
+  await firestoreApi.updateDoc(issueRef, {
+    pages,
+    pageCount: pages.length,
+    updatedAt: firestoreApi.serverTimestamp(),
+  });
+
   return { id: issueRef.id, ...issue, pages };
 }
 
