@@ -567,8 +567,8 @@ async function extractNewsletter(file, updateStatus) {
 }
 
 async function renderCompressedPage(page, pageNumber) {
-  const canvas = await renderPageCanvas(page, 1.5);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
+  const canvas = await renderPageCanvas(page, 1.8);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
   const url = await blobToDataUrl(blob);
   const result = { number: pageNumber, url, blob, size: blob?.size || 0, width: canvas.width, height: canvas.height };
   canvas.width = 1;
