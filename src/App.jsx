@@ -38,6 +38,7 @@ const USERS_KEY = "ps1-news-netter-users";
 const SESSION_KEY = "ps1-news-netter-session";
 const PASSCODE_NOTICE = "비밀번호는 숫자 8자리입니다.";
 const SUBADMIN_LIMIT = 3;
+const OCR_MIN_READABLE_UNITS = 3;
 
 const SECTION_DEFS = [
   { key: "major", label: "전공소식", icon: Newspaper, hints: ["전공소식", "학부", "학생", "비교과", "장학", "모집", "참여", "활동"] },
@@ -639,23 +640,25 @@ function NewsletterView({ issue }) {
           );
         })}
       </div>
-      <div className="pages">
-        <div className="section-label"><Download size={22} /><h3>원본 PDF 페이지</h3></div>
-        <div className="page-strip">
-          {(issue.pages || []).slice(0, 8).map((page) => (
-            <button className="page-thumb" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
-              <img
-                src={page.url}
-                alt={`${issue.title} ${page.number}쪽`}
-                loading="lazy"
-                onError={(event) => event.currentTarget.closest(".page-thumb")?.classList.add("image-error")}
-              />
-              <em className="page-fallback">이미지를 다시 게재해야 합니다</em>
-              <span>{page.number}쪽 · {formatBytes(page.size)}</span>
-            </button>
-          ))}
+      {Boolean(issue.pages?.length) && (
+        <div className="pages">
+          <div className="section-label"><Download size={22} /><h3>PDF 전시 이미지</h3></div>
+          <div className="page-strip">
+            {(issue.pages || []).slice(0, 8).map((page) => (
+              <button className="page-thumb" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
+                <img
+                  src={page.url}
+                  alt={`${issue.title} ${page.number}쪽`}
+                  loading="lazy"
+                  onError={(event) => event.currentTarget.closest(".page-thumb")?.classList.add("image-error")}
+                />
+                <em className="page-fallback">이미지를 다시 게재해야 합니다</em>
+                <span>{page.number}쪽 · {formatBytes(page.size)}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       {zoomedPage && <div className="page-modal" role="dialog" aria-modal="true" aria-label={`${zoomedPage.number}쪽 확대 보기`} onClick={() => setZoomedPage(null)}><div className="page-modal-inner" onClick={(event) => event.stopPropagation()}><button className="modal-close" type="button" onClick={() => setZoomedPage(null)}>닫기</button><img src={zoomedPage.url} alt={`${issue.title} ${zoomedPage.number}쪽 확대`} /></div></div>}
     </article>
   );
@@ -670,7 +673,7 @@ async function extractNewsletter(file, updateStatus) {
   const pdfWorker = await import("pdfjs-dist/build/pdf.worker.mjs?url");
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker.default;
   const data = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const pdf = await pdfjsLib.getDocument({ data: data.slice(0) }).promise;
   const pages = [];
   const texts = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
@@ -680,26 +683,73 @@ async function extractNewsletter(file, updateStatus) {
     texts.push(textContent.items.map((item) => item.str).join(" "));
     pages.push(await renderCompressedPage(page, pageNumber));
   }
-  const fullText = normalizeText(texts.join("\n"));
-  const pageTexts = texts.map((text) => normalizeText(text));
+  let fullText = normalizeText(texts.join("\n"));
+  let pageTexts = texts.map((text) => normalizeText(text));
   const readableUnits = splitIntoReadableUnits(fullText);
+  let usedOcr = false;
+  if (readableUnits.length < OCR_MIN_READABLE_UNITS) {
+    updateStatus("PDF가 이미지형으로 보입니다. OCR로 글자를 읽는 중입니다. 시간이 조금 걸릴 수 있습니다.");
+    const ocrTexts = await ocrPdfPages(pdf, updateStatus);
+    const ocrFullText = normalizeText(ocrTexts.join("\n"));
+    if (ocrFullText.length > fullText.length) {
+      fullText = ocrFullText;
+      pageTexts = ocrTexts.map((text) => normalizeText(text));
+      usedOcr = true;
+    }
+  }
   const extractionNote =
-    readableUnits.length < 3
-      ? "이 PDF는 이미지형이거나 텍스트가 적어서 자동 정리가 제한됩니다. 아래 칸에 뉴스 내용을 직접 보완한 뒤 공개 게재하세요."
+    splitIntoReadableUnits(fullText).length < OCR_MIN_READABLE_UNITS
+      ? "이 PDF는 이미지형이거나 글자 인식이 어려워 자동 정리가 제한됩니다. 아래 칸에 뉴스 내용을 직접 보완한 뒤 공개 게재하세요."
+      : usedOcr
+        ? "이미지형 PDF에서 OCR로 글자를 읽어 자동 분류했습니다. 공개 전에 문장과 분류를 확인하세요."
       : "PDF에서 읽은 내용을 자동으로 나눴습니다. 공개 전에 문장과 분류를 확인하세요.";
-  return { title: guessTitle(fullText), edition: guessEdition(fullText, file.name), monthLabel: guessMonthLabel(fullText), summary: makeSummary(fullText), sections: classifySections(fullText, pageTexts), events: extractEvents(fullText), pages, sourceFileName: file.name, extractionNote };
+  return { title: guessTitle(fullText), edition: guessEdition(fullText, file.name), monthLabel: guessMonthLabel(fullText), summary: makeSummary(fullText), sections: classifySections(fullText, pageTexts), events: extractEvents(fullText), pages, sourceFileName: file.name, pageCount: pdf.numPages, extractionNote };
 }
 
 async function renderCompressedPage(page, pageNumber) {
-  const viewport = page.getViewport({ scale: 1.55 });
+  const canvas = await renderPageCanvas(page, 1.15);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.72));
+  const url = await blobToDataUrl(blob);
+  const result = { number: pageNumber, url, blob, size: blob?.size || 0, width: canvas.width, height: canvas.height };
+  canvas.width = 1;
+  canvas.height = 1;
+  return result;
+}
+
+async function ocrPdfPages(pdf, updateStatus) {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker(["kor", "eng"], 1, {
+    logger: (message) => {
+      if (message.status === "recognizing text") {
+        updateStatus(`OCR로 글자를 읽는 중입니다. ${Math.round((message.progress || 0) * 100)}%`);
+      }
+    },
+  });
+  const results = [];
+  try {
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      updateStatus(`${pdf.numPages}쪽 중 ${pageNumber}쪽을 OCR로 읽는 중입니다.`);
+      const page = await pdf.getPage(pageNumber);
+      const canvas = await renderPageCanvas(page, 2);
+      const result = await worker.recognize(canvas);
+      results.push(result.data?.text || "");
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+  } finally {
+    await worker.terminate();
+  }
+  return results;
+}
+
+async function renderPageCanvas(page, scale) {
+  const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { alpha: false });
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
   await page.render({ canvasContext: context, viewport }).promise;
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-  const url = await blobToDataUrl(blob);
-  return { number: pageNumber, url, blob, size: blob?.size || 0, width: canvas.width, height: canvas.height };
+  return canvas;
 }
 
 function blobToDataUrl(blob) {
@@ -891,6 +941,7 @@ function createWelcomeIssue() {
     },
     events: SAMPLE_EVENTS,
     pages: [],
+    pageCount: 0,
   };
 }
 

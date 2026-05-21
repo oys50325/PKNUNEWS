@@ -230,7 +230,7 @@ function serializeIssue(issue, id) {
     sections: issue.sections,
     events: issue.events,
     sourceFileName: issue.sourceFileName,
-    pageCount: issue.pages?.length || 0,
+    pageCount: issue.pageCount || issue.pages?.length || 0,
     pages: (issue.pages || []).map((page, index) => ({
       number: page.number || index + 1,
       url: page.url,
