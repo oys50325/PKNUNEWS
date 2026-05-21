@@ -3,6 +3,7 @@ import {
   Archive,
   BookOpenText,
   CheckCircle2,
+  Download,
   Eye,
   EyeOff,
   FileUp,
