@@ -524,7 +524,7 @@ function NewsletterView({ issue }) {
   const [zoomedPage, setZoomedPage] = useState(null);
   return (
     <article className="newsletter">
-      <div className="masthead"><span>{issue.monthLabel}</span><h2>{issue.title}</h2><p>PDF 이미지를 아래로 내리면서 볼 수 있습니다.</p></div>
+      <div className="masthead"><span>{issue.monthLabel}</span><h2>{issue.title}</h2><p>PDF 이미지를 아래로 스크롤해 읽습니다.</p></div>
       <div className="pdf-scroll">
         {issue.pages?.length ? (
           issue.pages.map((page) => (

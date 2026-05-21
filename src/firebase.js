@@ -61,7 +61,7 @@ export async function listIssues() {
       firestoreApi.orderBy("publishedAt", "desc"),
     ),
   );
-  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  return snapshot.docs.map((item) => normalizeIssue({ id: item.id, ...item.data() }));
 }
 
 export async function listUsers() {
@@ -202,7 +202,7 @@ async function readRealtimeIssues() {
   const data = await readRealtime("newsletters");
   if (!data) return [];
   return Object.entries(data)
-    .map(([id, issue]) => ({ id, ...issue }))
+    .map(([id, issue]) => normalizeIssue({ id, ...issue }))
     .sort((a, b) => String(b.publishedAt || "").localeCompare(String(a.publishedAt || "")));
 }
 
@@ -241,6 +241,16 @@ function serializeIssue(issue, id) {
     storageMode: "compressed-inline-page-images",
     publishedAt: new Date().toISOString(),
   });
+}
+
+function normalizeIssue(issue) {
+  const pages = Array.isArray(issue.pages)
+    ? issue.pages
+    : Object.values(issue.pages || {}).filter(Boolean);
+  return {
+    ...issue,
+    pages: pages.sort((a, b) => (a.number || 0) - (b.number || 0)),
+  };
 }
 
 function readLocalUsers() {
