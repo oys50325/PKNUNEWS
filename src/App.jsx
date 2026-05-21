@@ -26,19 +26,26 @@ import {
 } from "lucide-react";
 import { listIssues, listUsers, publishIssue, realtimeDatabaseReady, removeIssue, saveUsers } from "./firebase.js";
 
-const ADMIN_ACCOUNT = { name: "PKNUNEWS", passcode: "50321004", role: "admin", studentYear: "주 제작자", approved: true };
+const ADMIN_ACCOUNT = {
+  name: "PKNUNEWS",
+  passcode: "50321004",
+  role: "admin",
+  studentYear: "주 제작자",
+  approved: true,
+};
+
 const USERS_KEY = "ps1-news-netter-users";
 const SESSION_KEY = "ps1-news-netter-session";
 const PASSCODE_NOTICE = "비밀번호는 숫자 8자리입니다.";
 const SUBADMIN_LIMIT = 3;
 
 const SECTION_DEFS = [
-  { key: "major", label: "전공소식", icon: Newspaper, hints: ["전공소식", "학부", "학생", "비교과", "장학", "모집"] },
-  { key: "faculty", label: "교수동정", icon: UserRound, hints: ["교수동정", "교수", "연구", "논문", "학회", "수상"] },
-  { key: "graduate", label: "대학원 소식", icon: GraduationCap, hints: ["대학원", "글로벌정책대학원", "일반대학원", "석사", "박사"] },
+  { key: "major", label: "전공소식", icon: Newspaper, hints: ["전공소식", "학부", "학생", "비교과", "장학", "모집", "참여", "활동"] },
+  { key: "faculty", label: "교수동정", icon: UserRound, hints: ["교수동정", "교수", "연구", "논문", "학회", "수상", "발표", "기고"] },
+  { key: "graduate", label: "대학원 소식", icon: GraduationCap, hints: ["대학원", "글로벌정책대학원", "일반대학원", "석사", "박사", "논문"] },
   { key: "calendar", label: "월별 전공 일정", icon: CalendarDays, hints: ["일정", "달력", "학사", "행사", "월별"] },
   { key: "interview", label: "복 들어오는 인터뷰", icon: UsersRound, hints: ["인터뷰", "복 들어오는", "동문", "재학생", "졸업생"] },
-  { key: "info", label: "알기 쉬운 사회복지 정보통", icon: Info, hints: ["사회복지 정보통", "알기 쉬운", "정책", "제도", "복지정보"] },
+  { key: "info", label: "알기 쉬운 사회복지 정보통", icon: Info, hints: ["사회복지 정보통", "알기 쉬운", "정책", "제도", "복지정보", "사회복지"] },
 ];
 
 const SAMPLE_EVENTS = [
@@ -100,13 +107,13 @@ export default function App() {
   const latestIssue = activeIssue || issues[0] || null;
   const previewIssue = extracted || latestIssue || createWelcomeIssue();
 
-  function togglePassword(key) {
-    setVisiblePasswords((current) => ({ ...current, [key]: !current[key] }));
-  }
-
   function openAuth(mode) {
     setAuthMode(mode);
     setAuthMessage("");
+  }
+
+  function togglePassword(key) {
+    setVisiblePasswords((current) => ({ ...current, [key]: !current[key] }));
   }
 
   function handleSignup(event) {
@@ -165,9 +172,7 @@ export default function App() {
 
   function approveUser(userId) {
     if (!canApproveUsers) return;
-    setUsers((current) =>
-      current.map((user) => (user.id === userId ? { ...user, approved: true, approvedAt: new Date().toISOString() } : user)),
-    );
+    setUsers((current) => current.map((user) => (user.id === userId ? { ...user, approved: true, approvedAt: new Date().toISOString() } : user)));
     setStatus("제작자를 승인했습니다.");
   }
 
@@ -180,9 +185,7 @@ export default function App() {
   function setSubadmin(userId, enabled) {
     if (!isAdmin) return;
     if (enabled && subadminCount >= SUBADMIN_LIMIT) return setStatus(`부 제작자는 최대 ${SUBADMIN_LIMIT}명까지 지정할 수 있습니다.`);
-    setUsers((current) =>
-      current.map((user) => (user.id === userId ? { ...user, role: enabled ? "subadmin" : "user", approved: true } : user)),
-    );
+    setUsers((current) => current.map((user) => (user.id === userId ? { ...user, role: enabled ? "subadmin" : "user", approved: true } : user)));
     setStatus(enabled ? "부 제작자로 지정했습니다." : "부 제작자 지정을 해제했습니다.");
   }
 
@@ -198,9 +201,7 @@ export default function App() {
     if (!target || target.passcode !== changeForm.currentPasscode) return setStatus("기존 비밀번호가 맞지 않습니다.");
     setUsers((current) =>
       current.map((user) =>
-        user.id === target.id
-          ? { ...user, passcode: changeForm.nextPasscode, resetRequested: false, updatedAt: new Date().toISOString() }
-          : user,
+        user.id === target.id ? { ...user, passcode: changeForm.nextPasscode, resetRequested: false, updatedAt: new Date().toISOString() } : user,
       ),
     );
     setChangeForm({ currentPasscode: "", nextPasscode: "", confirmPasscode: "" });
@@ -211,11 +212,7 @@ export default function App() {
     event.preventDefault();
     const target = users.find((user) => user.name === forgotName.trim());
     if (!target) return setAuthMessage("신청된 이름을 찾지 못했습니다.");
-    setUsers((current) =>
-      current.map((user) =>
-        user.id === target.id ? { ...user, resetRequested: true, requestedAt: new Date().toISOString() } : user,
-      ),
-    );
+    setUsers((current) => current.map((user) => (user.id === target.id ? { ...user, resetRequested: true, requestedAt: new Date().toISOString() } : user)));
     setForgotName("");
     setAuthMessage("비밀번호 확인 요청을 보냈습니다. 주 제작자에게 문의해주세요.");
   }
@@ -276,8 +273,7 @@ export default function App() {
     event.preventDefault();
     event.stopPropagation();
     setIsDraggingPdf(false);
-    const file = event.dataTransfer.files?.[0];
-    handleFile(file);
+    handleFile(event.dataTransfer.files?.[0]);
   }
 
   async function handlePublish() {
@@ -441,10 +437,7 @@ export default function App() {
 }
 
 function CompactAuthPanel(props) {
-  const {
-    authMode, setAuthMode, close, authMessage, loginForm, setLoginForm, signupForm, setSignupForm,
-    forgotName, setForgotName, visiblePasswords, togglePassword, onLogin, onSignup, onForgotRequest,
-  } = props;
+  const { authMode, setAuthMode, close, authMessage, loginForm, setLoginForm, signupForm, setSignupForm, forgotName, setForgotName, visiblePasswords, togglePassword, onLogin, onSignup, onForgotRequest } = props;
   return (
     <section className="compact-auth-panel">
       <div className="auth-tabs">
@@ -465,9 +458,7 @@ function CompactAuthPanel(props) {
           <span className="eyebrow"><UserPlus size={16} /> 제작자 신규가입</span>
           <p>{PASSCODE_NOTICE} 신청 후 주 제작자 또는 부 제작자 승인이 필요합니다.</p>
           <input value={signupForm.name} onChange={(event) => setSignupForm({ ...signupForm, name: event.target.value })} placeholder="이름" />
-          <select value={signupForm.studentYear} onChange={(event) => setSignupForm({ ...signupForm, studentYear: event.target.value })}>
-            {STUDENT_YEARS.map((year) => <option key={year} value={year}>{year}학번</option>)}
-          </select>
+          <select value={signupForm.studentYear} onChange={(event) => setSignupForm({ ...signupForm, studentYear: event.target.value })}>{STUDENT_YEARS.map((year) => <option key={year} value={year}>{year}학번</option>)}</select>
           <PasswordField value={signupForm.passcode} onChange={(value) => setSignupForm({ ...signupForm, passcode: value })} visible={visiblePasswords.signup} onToggle={() => togglePassword("signup")} placeholder="숫자 8자리 비밀번호" />
           <PasswordField value={signupForm.confirmPasscode} onChange={(value) => setSignupForm({ ...signupForm, confirmPasscode: value })} visible={visiblePasswords.signupConfirm} onToggle={() => togglePassword("signupConfirm")} placeholder="비밀번호 확인" />
           <button className="primary" type="submit">제작자 신청</button>
@@ -487,11 +478,7 @@ function CompactAuthPanel(props) {
 }
 
 function AccountPanel(props) {
-  const {
-    session, isAdmin, canApproveUsers, users, pendingUsers, approvedUsers, passwordRequests, subadminCount,
-    changeForm, setChangeForm, visiblePasswords, togglePassword, onChangePasscode, onApproveUser,
-    onExpelUser, onSetSubadmin, onClearRequest, realtimeDatabaseReady,
-  } = props;
+  const { session, isAdmin, canApproveUsers, users, pendingUsers, approvedUsers, passwordRequests, subadminCount, changeForm, setChangeForm, visiblePasswords, togglePassword, onChangePasscode, onApproveUser, onExpelUser, onSetSubadmin, onClearRequest, realtimeDatabaseReady } = props;
   return (
     <aside id="account" className="login-box account-panel">
       <span className="eyebrow"><UserRound size={16} /> 제작자 계정</span>
@@ -513,12 +500,7 @@ function AccountPanel(props) {
           <strong>제작자 승인 대기</strong>
           <p>주 제작자와 부 제작자만 공동제작자를 승인할 수 있습니다.</p>
           {pendingUsers.length === 0 && <span className="muted">승인 대기자가 없습니다.</span>}
-          {pendingUsers.map((user) => (
-            <div className="request-item" key={user.id}>
-              <span>{user.name} · {user.studentYear}학번</span>
-              <button type="button" onClick={() => onApproveUser(user.id)}><UserCheck size={16} /> 승인</button>
-            </div>
-          ))}
+          {pendingUsers.map((user) => <div className="request-item" key={user.id}><span>{user.name} · {user.studentYear}학번</span><button type="button" onClick={() => onApproveUser(user.id)}><UserCheck size={16} /> 승인</button></div>)}
         </div>
       )}
 
@@ -542,13 +524,7 @@ function AccountPanel(props) {
           <strong>비밀번호 확인 요청</strong>
           <p>요청한 제작자의 비밀번호만 표시됩니다.</p>
           {passwordRequests.length === 0 && <span className="muted">현재 요청이 없습니다.</span>}
-          {passwordRequests.map((user) => (
-            <div className="request-item" key={user.id}>
-              <span>{user.name} · {user.studentYear}학번</span>
-              <code>{user.passcode}</code>
-              <button type="button" onClick={() => onClearRequest(user.id)}>처리 완료</button>
-            </div>
-          ))}
+          {passwordRequests.map((user) => <div className="request-item" key={user.id}><span>{user.name} · {user.studentYear}학번</span><code>{user.passcode}</code><button type="button" onClick={() => onClearRequest(user.id)}>처리 완료</button></div>)}
           <span className="muted">전체 제작자 {users.length}명</span>
         </div>
       )}
@@ -567,20 +543,10 @@ function PasswordField({ value, onChange, visible, onToggle, placeholder }) {
 
 function NewsletterView({ issue }) {
   const [zoomedPage, setZoomedPage] = useState(null);
-
   return (
     <article className="newsletter">
-      <div className="masthead">
-        <span>{issue.monthLabel}</span>
-        <h2>{issue.title}</h2>
-        <p>{issue.summary}</p>
-      </div>
-      <div className="section-nav">
-        {SECTION_DEFS.map((section) => {
-          const Icon = section.icon;
-          return <a key={section.key} href={`#${section.key}`}><Icon size={17} />{section.label}</a>;
-        })}
-      </div>
+      <div className="masthead"><span>{issue.monthLabel}</span><h2>{issue.title}</h2><p>{issue.summary}</p></div>
+      <div className="section-nav">{SECTION_DEFS.map((section) => { const Icon = section.icon; return <a key={section.key} href={`#${section.key}`}><Icon size={17} />{section.label}</a>; })}</div>
       <div className="content-grid">
         {SECTION_DEFS.map((section) => {
           const Icon = section.icon;
@@ -602,21 +568,11 @@ function NewsletterView({ issue }) {
         <div className="section-label"><Download size={22} /><h3>원본 PDF 페이지</h3></div>
         <div className="page-strip">
           {(issue.pages || []).slice(0, 8).map((page) => (
-            <button className="page-thumb" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
-              <img src={page.url} alt={`${issue.title} ${page.number}쪽`} loading="lazy" />
-              <span>{page.number}쪽 · {formatBytes(page.size)}</span>
-            </button>
+            <button className="page-thumb" type="button" key={page.number} onClick={() => setZoomedPage(page)}><img src={page.url} alt={`${issue.title} ${page.number}쪽`} loading="lazy" /><span>{page.number}쪽 · {formatBytes(page.size)}</span></button>
           ))}
         </div>
       </div>
-      {zoomedPage && (
-        <div className="page-modal" role="dialog" aria-modal="true" aria-label={`${zoomedPage.number}쪽 확대 보기`} onClick={() => setZoomedPage(null)}>
-          <div className="page-modal-inner" onClick={(event) => event.stopPropagation()}>
-            <button className="modal-close" type="button" onClick={() => setZoomedPage(null)}>닫기</button>
-            <img src={zoomedPage.url} alt={`${issue.title} ${zoomedPage.number}쪽 확대`} />
-          </div>
-        </div>
-      )}
+      {zoomedPage && <div className="page-modal" role="dialog" aria-modal="true" aria-label={`${zoomedPage.number}쪽 확대 보기`} onClick={() => setZoomedPage(null)}><div className="page-modal-inner" onClick={(event) => event.stopPropagation()}><button className="modal-close" type="button" onClick={() => setZoomedPage(null)}>닫기</button><img src={zoomedPage.url} alt={`${issue.title} ${zoomedPage.number}쪽 확대`} /></div></div>}
     </article>
   );
 }
@@ -642,16 +598,7 @@ async function extractNewsletter(file, updateStatus) {
   }
   const fullText = normalizeText(texts.join("\n"));
   const pageTexts = texts.map((text) => normalizeText(text));
-  return {
-    title: guessTitle(fullText),
-    edition: guessEdition(fullText, file.name),
-    monthLabel: guessMonthLabel(fullText),
-    summary: makeSummary(fullText),
-    sections: classifySections(fullText, pageTexts),
-    events: extractEvents(fullText),
-    pages,
-    sourceFileName: file.name,
-  };
+  return { title: guessTitle(fullText), edition: guessEdition(fullText, file.name), monthLabel: guessMonthLabel(fullText), summary: makeSummary(fullText), sections: classifySections(fullText, pageTexts), events: extractEvents(fullText), pages, sourceFileName: file.name };
 }
 
 async function renderCompressedPage(page, pageNumber) {
@@ -725,15 +672,12 @@ function classifySections(text, pageTexts = []) {
   const sections = Object.fromEntries(SECTION_DEFS.map((section) => [section.key, []]));
   const units = splitIntoReadableUnits(text);
   const used = new Set();
-
   units.forEach((unit, index) => {
     const key = bestSectionForText(unit);
-    if (!key || key === "calendar") return;
-    if (sections[key].length >= 6) return;
+    if (!key || key === "calendar" || sections[key].length >= 6) return;
     sections[key].push(unit);
     used.add(index);
   });
-
   const unassigned = units.filter((_, index) => !used.has(index));
   const fillKeys = ["major", "faculty", "graduate", "interview", "info"];
   fillKeys.forEach((key, index) => {
@@ -743,12 +687,10 @@ function classifySections(text, pageTexts = []) {
     const fallback = pageUnits[0] || unassigned.shift();
     if (fallback) sections[key].push(fallback);
   });
-
   unassigned.forEach((unit, index) => {
     const key = fillKeys[index % fillKeys.length];
     if (sections[key].length < 6) sections[key].push(unit);
   });
-
   return sections;
 }
 
@@ -770,9 +712,7 @@ function splitIntoReadableUnits(text) {
     .filter((item) => item.length > 24)
     .map((item) => item.replace(/^[-•·\d.\s]+/, "").trim())
     .filter(Boolean);
-
   if (cleaned.length > 0) return cleaned.map((item) => item.slice(0, 260));
-
   const chunks = [];
   const words = text.replace(/\s+/g, " ").trim().split(" ");
   for (let index = 0; index < words.length; index += 32) {
