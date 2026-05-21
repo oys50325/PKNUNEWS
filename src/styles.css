@@ -494,26 +494,67 @@ input:focus {
   gap: 12px;
 }
 
-.page-strip figure {
-  margin: 0;
+.page-thumb {
+  display: grid;
+  gap: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
+  padding: 0;
   overflow: hidden;
   background: #f8fafc;
+  text-align: left;
 }
 
-.page-strip img {
+.page-thumb img {
   width: 100%;
   aspect-ratio: 0.72;
   object-fit: cover;
   object-position: top;
 }
 
-.page-strip figcaption {
+.page-thumb span {
   padding: 8px 10px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
+}
+
+.page-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(18, 49, 95, 0.72);
+}
+
+.page-modal-inner {
+  position: relative;
+  width: min(960px, 96vw);
+  max-height: 94vh;
+  overflow: auto;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+}
+
+.page-modal-inner img {
+  width: 100%;
+  height: auto;
+}
+
+.modal-close {
+  position: sticky;
+  top: 10px;
+  left: calc(100% - 76px);
+  z-index: 2;
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fff;
+  background: var(--navy);
+  font-weight: 900;
 }
 
 .archive {

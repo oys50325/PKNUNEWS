@@ -566,6 +566,8 @@ function PasswordField({ value, onChange, visible, onToggle, placeholder }) {
 }
 
 function NewsletterView({ issue }) {
+  const [zoomedPage, setZoomedPage] = useState(null);
+
   return (
     <article className="newsletter">
       <div className="masthead">
@@ -588,7 +590,7 @@ function NewsletterView({ issue }) {
               <div className="section-label"><Icon size={22} /><h3>{section.label}</h3></div>
               {section.key === "calendar" ? <EventList events={issue.events} /> : (
                 <div className="story-list">
-                  {content.slice(0, 4).map((text, index) => <p key={`${section.key}-${index}`}>{text}</p>)}
+                  {content.slice(0, 6).map((text, index) => <p key={`${section.key}-${index}`}>{text}</p>)}
                   {content.length === 0 && <p>PDF에서 이 영역의 내용을 찾으면 자동으로 여기에 정리됩니다.</p>}
                 </div>
               )}
@@ -597,13 +599,24 @@ function NewsletterView({ issue }) {
         })}
       </div>
       <div className="pages">
-        <div className="section-label"><Download size={22} /><h3>PDF 전시 이미지</h3></div>
+        <div className="section-label"><Download size={22} /><h3>원본 PDF 페이지</h3></div>
         <div className="page-strip">
           {(issue.pages || []).slice(0, 8).map((page) => (
-            <figure key={page.number}><img src={page.url} alt={`${issue.title} ${page.number}쪽`} loading="lazy" /><figcaption>{page.number}쪽 · {formatBytes(page.size)}</figcaption></figure>
+            <button className="page-thumb" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
+              <img src={page.url} alt={`${issue.title} ${page.number}쪽`} loading="lazy" />
+              <span>{page.number}쪽 · {formatBytes(page.size)}</span>
+            </button>
           ))}
         </div>
       </div>
+      {zoomedPage && (
+        <div className="page-modal" role="dialog" aria-modal="true" aria-label={`${zoomedPage.number}쪽 확대 보기`} onClick={() => setZoomedPage(null)}>
+          <div className="page-modal-inner" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" type="button" onClick={() => setZoomedPage(null)}>닫기</button>
+            <img src={zoomedPage.url} alt={`${issue.title} ${zoomedPage.number}쪽 확대`} />
+          </div>
+        </div>
+      )}
     </article>
   );
 }
@@ -628,12 +641,13 @@ async function extractNewsletter(file, updateStatus) {
     pages.push(await renderCompressedPage(page, pageNumber));
   }
   const fullText = normalizeText(texts.join("\n"));
+  const pageTexts = texts.map((text) => normalizeText(text));
   return {
     title: guessTitle(fullText),
     edition: guessEdition(fullText, file.name),
     monthLabel: guessMonthLabel(fullText),
     summary: makeSummary(fullText),
-    sections: classifySections(fullText),
+    sections: classifySections(fullText, pageTexts),
     events: extractEvents(fullText),
     pages,
     sourceFileName: file.name,
@@ -707,9 +721,65 @@ function makeSummary(text) {
   return (sentences.slice(0, 2).join(". ") || "이번 호의 주요 소식과 전공 일정을 한눈에 볼 수 있습니다.").slice(0, 220);
 }
 
-function classifySections(text) {
-  const sentences = text.split(/[.!?。]\s*/).map((item) => item.trim()).filter((item) => item.length > 16);
-  return Object.fromEntries(SECTION_DEFS.map((section) => [section.key, sentences.filter((sentence) => section.hints.some((hint) => sentence.includes(hint))).slice(0, 5)]));
+function classifySections(text, pageTexts = []) {
+  const sections = Object.fromEntries(SECTION_DEFS.map((section) => [section.key, []]));
+  const units = splitIntoReadableUnits(text);
+  const used = new Set();
+
+  units.forEach((unit, index) => {
+    const key = bestSectionForText(unit);
+    if (!key || key === "calendar") return;
+    if (sections[key].length >= 6) return;
+    sections[key].push(unit);
+    used.add(index);
+  });
+
+  const unassigned = units.filter((_, index) => !used.has(index));
+  const fillKeys = ["major", "faculty", "graduate", "interview", "info"];
+  fillKeys.forEach((key, index) => {
+    if (sections[key].length > 0) return;
+    const pageCandidate = pageTexts[index + 1] || pageTexts[index] || "";
+    const pageUnits = splitIntoReadableUnits(pageCandidate);
+    const fallback = pageUnits[0] || unassigned.shift();
+    if (fallback) sections[key].push(fallback);
+  });
+
+  unassigned.forEach((unit, index) => {
+    const key = fillKeys[index % fillKeys.length];
+    if (sections[key].length < 6) sections[key].push(unit);
+  });
+
+  return sections;
+}
+
+function bestSectionForText(text) {
+  let best = { key: "", score: 0 };
+  SECTION_DEFS.forEach((section) => {
+    const score = section.hints.reduce((total, hint) => total + (text.includes(hint) ? 2 : 0), 0);
+    if (score > best.score) best = { key: section.key, score };
+  });
+  return best.score > 0 ? best.key : "";
+}
+
+function splitIntoReadableUnits(text) {
+  const cleaned = text
+    .replace(/\s+/g, " ")
+    .replace(/([.!?。])\s+/g, "$1|")
+    .split("|")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 24)
+    .map((item) => item.replace(/^[-•·\d.\s]+/, "").trim())
+    .filter(Boolean);
+
+  if (cleaned.length > 0) return cleaned.map((item) => item.slice(0, 260));
+
+  const chunks = [];
+  const words = text.replace(/\s+/g, " ").trim().split(" ");
+  for (let index = 0; index < words.length; index += 32) {
+    const chunk = words.slice(index, index + 32).join(" ").trim();
+    if (chunk.length > 24) chunks.push(chunk.slice(0, 260));
+  }
+  return chunks;
 }
 
 function extractEvents(text) {
