@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { listIssues, listUsers, publishIssue, realtimeDatabaseReady, removeIssue, saveUsers } from "./firebase.js";
 
-const ADMIN_ACCOUNT = { name: "PKNUNEWS", passcode: "50321004", role: "admin", studentYear: "관리자", approved: true };
+const ADMIN_ACCOUNT = { name: "PKNUNEWS", passcode: "50321004", role: "admin", studentYear: "주 제작자", approved: true };
 const USERS_KEY = "ps1-news-netter-users";
 const SESSION_KEY = "ps1-news-netter-session";
 const PASSCODE_NOTICE = "비밀번호는 숫자 8자리입니다.";
@@ -52,7 +52,7 @@ const STUDENT_YEARS = Array.from({ length: 41 }, (_, index) => String(2010 + ind
 
 export default function App() {
   const [session, setSession] = useState(() => readSession());
-  const [authMode, setAuthMode] = useState("login");
+  const [authMode, setAuthMode] = useState(null);
   const [authMessage, setAuthMessage] = useState("");
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [users, setUsers] = useState(() => readUsers());
@@ -65,30 +65,26 @@ export default function App() {
   const [issues, setIssues] = useState([]);
   const [activeIssue, setActiveIssue] = useState(null);
   const [extracted, setExtracted] = useState(null);
-  const [status, setStatus] = useState("PDF를 첨부하면 뉴스레터 전시본을 자동으로 만듭니다.");
+  const [status, setStatus] = useState("제작자는 PDF를 첨부해 뉴스레터 전시본을 만들 수 있습니다.");
   const [isBusy, setIsBusy] = useState(false);
   const [query, setQuery] = useState("");
 
   const isAdmin = session?.role === "admin";
   const canApproveUsers = session?.role === "admin" || session?.role === "subadmin";
+  const canUseStudio = Boolean(session?.approved);
   const pendingUsers = users.filter((user) => !user.approved);
   const approvedUsers = users.filter((user) => user.approved);
   const passwordRequests = users.filter((user) => user.resetRequested);
   const subadminCount = users.filter((user) => user.role === "subadmin").length;
 
   useEffect(() => {
-    if (session) refreshIssues();
-  }, [session]);
-
-  useEffect(() => {
+    refreshIssues();
     loadUsers();
   }, []);
 
   useEffect(() => {
     if (!usersLoaded) return;
-    saveUsers(users).catch((error) => {
-      setStatus(`가입자 정보를 저장하지 못했습니다: ${error.message}`);
-    });
+    saveUsers(users).catch((error) => setStatus(`제작자 정보를 저장하지 못했습니다: ${error.message}`));
   }, [users, usersLoaded]);
 
   const filteredIssues = useMemo(() => {
@@ -108,12 +104,17 @@ export default function App() {
     setVisiblePasswords((current) => ({ ...current, [key]: !current[key] }));
   }
 
+  function openAuth(mode) {
+    setAuthMode(mode);
+    setAuthMessage("");
+  }
+
   function handleSignup(event) {
     event.preventDefault();
     const name = signupForm.name.trim();
     const validation = validatePasscodePair(signupForm.passcode, signupForm.confirmPasscode);
     if (!name) return setAuthMessage("이름을 입력해주세요.");
-    if (name === ADMIN_ACCOUNT.name || users.some((user) => user.name === name)) return setAuthMessage("이미 가입된 이름입니다.");
+    if (name === ADMIN_ACCOUNT.name || users.some((user) => user.name === name)) return setAuthMessage("이미 신청된 이름입니다.");
     if (validation) return setAuthMessage(validation);
 
     setUsers((current) => [
@@ -129,7 +130,7 @@ export default function App() {
         createdAt: new Date().toISOString(),
       },
     ]);
-    setAuthMessage("가입 신청이 완료되었습니다. 관리자 또는 부관리자 승인 후 이용할 수 있습니다.");
+    setAuthMessage("제작자 가입 신청이 완료되었습니다. 주 제작자 또는 부 제작자 승인 후 제작실을 이용할 수 있습니다.");
     setAuthMode("login");
     setSignupForm({ name: "", studentYear: "2025", passcode: "", confirmPasscode: "" });
   }
@@ -140,17 +141,19 @@ export default function App() {
     const passcode = loginForm.passcode.trim();
     const account = name === ADMIN_ACCOUNT.name ? ADMIN_ACCOUNT : users.find((user) => user.name === name);
     if (!account || account.passcode !== passcode) return setAuthMessage("이름 또는 비밀번호가 맞지 않습니다.");
-    if (!account.approved) return setAuthMessage("아직 승인 대기 중입니다. 관리자 또는 부관리자 승인 후 이용할 수 있습니다.");
+    if (!account.approved) return setAuthMessage("아직 승인 대기 중입니다. 공개 뉴스레터는 볼 수 있지만 제작실은 승인 후 이용할 수 있습니다.");
 
     const nextSession = {
       id: account.id || "admin",
       name: account.name,
       role: account.role,
       studentYear: account.studentYear,
+      approved: true,
       signedInAt: new Date().toISOString(),
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
     setSession(nextSession);
+    setAuthMode(null);
     setAuthMessage("");
   }
 
@@ -165,24 +168,22 @@ export default function App() {
     setUsers((current) =>
       current.map((user) => (user.id === userId ? { ...user, approved: true, approvedAt: new Date().toISOString() } : user)),
     );
-    setStatus("가입자를 승인했습니다.");
+    setStatus("제작자를 승인했습니다.");
   }
 
   function expelUser(userId) {
     if (!isAdmin) return;
-    const target = users.find((user) => user.id === userId);
     setUsers((current) => current.filter((user) => user.id !== userId));
-    if (target?.name === session?.name) handleLogout();
-    setStatus("선택한 사용자를 강제 탈퇴시켰습니다.");
+    setStatus("선택한 제작자를 강제 탈퇴시켰습니다.");
   }
 
   function setSubadmin(userId, enabled) {
     if (!isAdmin) return;
-    if (enabled && subadminCount >= SUBADMIN_LIMIT) return setStatus(`부관리자는 최대 ${SUBADMIN_LIMIT}명까지 지정할 수 있습니다.`);
+    if (enabled && subadminCount >= SUBADMIN_LIMIT) return setStatus(`부 제작자는 최대 ${SUBADMIN_LIMIT}명까지 지정할 수 있습니다.`);
     setUsers((current) =>
       current.map((user) => (user.id === userId ? { ...user, role: enabled ? "subadmin" : "user", approved: true } : user)),
     );
-    setStatus(enabled ? "부관리자로 지정했습니다." : "부관리자 지정을 해제했습니다.");
+    setStatus(enabled ? "부 제작자로 지정했습니다." : "부 제작자 지정을 해제했습니다.");
   }
 
   function handleChangePasscode(event) {
@@ -190,8 +191,8 @@ export default function App() {
     const validation = validatePasscodePair(changeForm.nextPasscode, changeForm.confirmPasscode);
     if (validation) return setStatus(validation);
     if (isAdmin) {
-      if (changeForm.currentPasscode !== ADMIN_ACCOUNT.passcode) return setStatus("기존 관리자 비밀번호가 맞지 않습니다.");
-      return setStatus("기본 관리자 비밀번호는 코드에 고정되어 있어 이 화면에서는 변경하지 않습니다.");
+      if (changeForm.currentPasscode !== ADMIN_ACCOUNT.passcode) return setStatus("기존 주 제작자 비밀번호가 맞지 않습니다.");
+      return setStatus("기본 주 제작자 비밀번호는 코드에 고정되어 있어 이 화면에서는 변경하지 않습니다.");
     }
     const target = users.find((user) => user.name === session.name);
     if (!target || target.passcode !== changeForm.currentPasscode) return setStatus("기존 비밀번호가 맞지 않습니다.");
@@ -208,16 +209,15 @@ export default function App() {
 
   function handleForgotRequest(event) {
     event.preventDefault();
-    const name = forgotName.trim();
-    const target = users.find((user) => user.name === name);
-    if (!target) return setAuthMessage("가입된 이름을 찾지 못했습니다.");
+    const target = users.find((user) => user.name === forgotName.trim());
+    if (!target) return setAuthMessage("신청된 이름을 찾지 못했습니다.");
     setUsers((current) =>
       current.map((user) =>
         user.id === target.id ? { ...user, resetRequested: true, requestedAt: new Date().toISOString() } : user,
       ),
     );
     setForgotName("");
-    setAuthMessage("비밀번호 확인 요청을 보냈습니다. 관리자에게 문의해주세요.");
+    setAuthMessage("비밀번호 확인 요청을 보냈습니다. 주 제작자에게 문의해주세요.");
   }
 
   function clearPasswordRequest(userId) {
@@ -239,14 +239,14 @@ export default function App() {
       const savedUsers = await listUsers();
       setUsers(savedUsers.map((user) => ({ ...user, role: user.role || "user", approved: Boolean(user.approved) })));
     } catch (error) {
-      setStatus(`Realtime Database 가입자 정보를 불러오지 못했습니다: ${error.message}`);
+      setStatus(`Realtime Database 제작자 정보를 불러오지 못했습니다: ${error.message}`);
     } finally {
       setUsersLoaded(true);
     }
   }
 
   async function handleFile(file) {
-    if (!file) return;
+    if (!file || !canUseStudio) return;
     setIsBusy(true);
     setExtracted(null);
     setStatus("PDF를 읽고 있습니다. 텍스트와 페이지 이미지를 가볍게 변환하는 중입니다.");
@@ -263,14 +263,14 @@ export default function App() {
   }
 
   async function handlePublish() {
-    if (!extracted) return;
+    if (!extracted || !canUseStudio) return;
     setIsBusy(true);
     setStatus("게재 중입니다. 원본 PDF는 저장하지 않고 압축된 전시 이미지와 요약 데이터만 보관합니다.");
     try {
       await publishIssue(extracted);
       setExtracted(null);
       await refreshIssues();
-      setStatus("게재가 완료되었습니다. PDF 원본은 브라우저 메모리에서만 사용되고 보관되지 않습니다.");
+      setStatus("게재가 완료되었습니다. 공개 뉴스레터 화면에 반영됩니다.");
     } catch (error) {
       setStatus(`게재 실패: ${error.message}`);
     } finally {
@@ -293,109 +293,54 @@ export default function App() {
     }
   }
 
-  if (!session) {
-    return (
-      <AuthGate
-        authMode={authMode}
-        setAuthMode={setAuthMode}
-        authMessage={authMessage}
-        loginForm={loginForm}
-        setLoginForm={setLoginForm}
-        signupForm={signupForm}
-        setSignupForm={setSignupForm}
-        forgotName={forgotName}
-        setForgotName={setForgotName}
-        visiblePasswords={visiblePasswords}
-        togglePassword={togglePassword}
-        onLogin={handleLogin}
-        onSignup={handleSignup}
-        onForgotRequest={handleForgotRequest}
-      />
-    );
-  }
-
   return (
-    <main className="site-shell">
+    <main className="site-shell public-shell">
       <header className="topbar">
-        <a className="brand" href="#home" aria-label="PS1 NEWS NETTER 홈">
+        <a className="brand" href="#newsletter" aria-label="PS1 NEWS NETTER 홈">
           <img src="/assets/ps1-logo.jpg" alt="PS1 로고" />
           <span>
             <strong>PS1 NEWS NETTER</strong>
-            <small>사회복지학전공 뉴스레터 전시실</small>
+            <small>사회복지학전공 공개 뉴스레터</small>
           </span>
         </a>
         <nav>
-          <a href="#upload">PDF 게재</a>
           <a href="#newsletter">뉴스레터</a>
           <a href="#archive">지난 뉴스레터 보기</a>
-          <a href="#account">계정</a>
-          <button className="nav-button" type="button" onClick={handleLogout}><LogOut size={16} />로그아웃</button>
+          {canUseStudio && <a href="#studio">제작실</a>}
+          {session ? (
+            <button className="nav-button" type="button" onClick={handleLogout}><LogOut size={16} />로그아웃</button>
+          ) : (
+            <>
+              <button className="nav-button compact-auth" type="button" onClick={() => openAuth("login")}>로그인</button>
+              <button className="nav-button compact-auth" type="button" onClick={() => openAuth("signup")}>신규가입</button>
+            </>
+          )}
         </nav>
       </header>
 
-      <section id="home" className="hero">
-        <div className="hero-copy">
-          <p>PKNU Social Welfare · PS1 NEWS LETTER</p>
-          <h1>PS1 NEWS NETTER</h1>
-          <span>PDF 하나로 뉴스레터 전시, 기록실, 월별 일정까지 가볍게 운영합니다.</span>
-        </div>
-        <div className="hero-panel">
-          <Newspaper size={34} />
-          <strong>{previewIssue.edition}</strong>
-          <span>{previewIssue.monthLabel}</span>
-        </div>
-      </section>
-
-      <section className="operations" aria-label="운영 방식">
-        <article><FileUp size={22} /><strong>PDF 첨부</strong><span>승인된 구성원은 누구나 뉴스레터 전시본을 만들 수 있습니다.</span></article>
-        <article><PanelTop size={22} /><strong>자동 전시</strong><span>텍스트를 영역별로 정리하고 페이지 이미지를 압축합니다.</span></article>
-        <article><ShieldCheck size={22} /><strong>승인 후 게재</strong><span>원본 PDF 대신 승인 결과만 저장해 사용량을 최소화합니다.</span></article>
-      </section>
-
-      <section id="upload" className="admin-layout">
-        <div className="upload-zone">
-          <div>
-            <span className="eyebrow"><Sparkles size={16} /> 뉴스레터 작업대</span>
-            <h2>PDF를 올리면 뉴스레터 전시본을 만듭니다</h2>
-            <p>{status}</p>
-          </div>
-          <label className={isBusy ? "drop disabled" : "drop"}>
-            <FileUp size={42} />
-            <strong>PDF 선택</strong>
-            <span>승인 전까지 원본 PDF는 서버에 저장하지 않습니다.</span>
-            <input type="file" accept="application/pdf" disabled={isBusy} onChange={(event) => handleFile(event.target.files?.[0])} />
-          </label>
-          {extracted && (
-            <div className="approval-row">
-              <button className="primary" type="button" disabled={isBusy} onClick={handlePublish}><CheckCircle2 size={18} />최종 승인 및 게재</button>
-              <button className="ghost" type="button" disabled={isBusy} onClick={() => setExtracted(null)}><Trash2 size={18} />미리보기 삭제</button>
-            </div>
-          )}
-        </div>
-
-        <AccountPanel
-          session={session}
-          isAdmin={isAdmin}
-          canApproveUsers={canApproveUsers}
-          users={users}
-          pendingUsers={pendingUsers}
-          approvedUsers={approvedUsers}
-          passwordRequests={passwordRequests}
-          subadminCount={subadminCount}
-          changeForm={changeForm}
-          setChangeForm={setChangeForm}
+      {authMode && !session && (
+        <CompactAuthPanel
+          authMode={authMode}
+          setAuthMode={setAuthMode}
+          close={() => setAuthMode(null)}
+          authMessage={authMessage}
+          loginForm={loginForm}
+          setLoginForm={setLoginForm}
+          signupForm={signupForm}
+          setSignupForm={setSignupForm}
+          forgotName={forgotName}
+          setForgotName={setForgotName}
           visiblePasswords={visiblePasswords}
           togglePassword={togglePassword}
-          onChangePasscode={handleChangePasscode}
-          onApproveUser={approveUser}
-          onExpelUser={expelUser}
-          onSetSubadmin={setSubadmin}
-          onClearRequest={clearPasswordRequest}
-          realtimeDatabaseReady={realtimeDatabaseReady}
+          onLogin={handleLogin}
+          onSignup={handleSignup}
+          onForgotRequest={handleForgotRequest}
         />
-      </section>
+      )}
 
-      <section id="newsletter" className="reader-layout"><NewsletterView issue={previewIssue} /></section>
+      <section id="newsletter" className="reader-layout">
+        <NewsletterView issue={previewIssue} />
+      </section>
 
       <section id="archive" className="archive">
         <div className="section-title">
@@ -403,7 +348,7 @@ export default function App() {
           <label className="search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="호수, 월, 제목 검색" /></label>
         </div>
         <div className="issue-grid">
-          {filteredIssues.length === 0 && <p className="empty">아직 기록된 뉴스레터가 없습니다. PDF를 게재하면 이곳에 쌓입니다.</p>}
+          {filteredIssues.length === 0 && <p className="empty">아직 기록된 뉴스레터가 없습니다. 제작자가 PDF를 게재하면 이곳에 쌓입니다.</p>}
           {filteredIssues.map((issue) => (
             <article key={issue.id} className="issue-card">
               <button type="button" onClick={() => setActiveIssue(issue)}><BookOpenText size={24} /><strong>{issue.title}</strong><span>{issue.edition} · {issue.monthLabel}</span></button>
@@ -412,65 +357,110 @@ export default function App() {
           ))}
         </div>
       </section>
+
+      {canUseStudio && (
+        <section id="studio" className="studio-section">
+          <div className="section-title">
+            <div><span className="eyebrow"><Sparkles size={16} /> 제작실</span><h2>제작자 뉴스레터 작업대</h2></div>
+            <span className="producer-badge">{session.name} · {roleLabel(session.role)}</span>
+          </div>
+          <div className="operations" aria-label="제작 방식">
+            <article><FileUp size={22} /><strong>PDF 첨부</strong><span>승인된 제작자는 뉴스레터 전시본을 만들 수 있습니다.</span></article>
+            <article><PanelTop size={22} /><strong>자동 전시</strong><span>텍스트를 영역별로 정리하고 페이지 이미지를 압축합니다.</span></article>
+            <article><ShieldCheck size={22} /><strong>공개 게재</strong><span>게재 후 URL을 아는 누구나 볼 수 있습니다.</span></article>
+          </div>
+          <section className="admin-layout">
+            <div className="upload-zone">
+              <div>
+                <span className="eyebrow"><Newspaper size={16} /> PDF 제작</span>
+                <h2>PDF를 올리면 공개 뉴스레터 전시본을 만듭니다</h2>
+                <p>{status}</p>
+              </div>
+              <label className={isBusy ? "drop disabled" : "drop"}>
+                <FileUp size={42} />
+                <strong>PDF 선택</strong>
+                <span>승인 전까지 원본 PDF는 서버에 저장하지 않습니다.</span>
+                <input type="file" accept="application/pdf" disabled={isBusy} onChange={(event) => handleFile(event.target.files?.[0])} />
+              </label>
+              {extracted && (
+                <div className="approval-row">
+                  <button className="primary" type="button" disabled={isBusy} onClick={handlePublish}><CheckCircle2 size={18} />최종 승인 및 공개 게재</button>
+                  <button className="ghost" type="button" disabled={isBusy} onClick={() => setExtracted(null)}><Trash2 size={18} />미리보기 삭제</button>
+                </div>
+              )}
+            </div>
+            <AccountPanel
+              session={session}
+              isAdmin={isAdmin}
+              canApproveUsers={canApproveUsers}
+              users={users}
+              pendingUsers={pendingUsers}
+              approvedUsers={approvedUsers}
+              passwordRequests={passwordRequests}
+              subadminCount={subadminCount}
+              changeForm={changeForm}
+              setChangeForm={setChangeForm}
+              visiblePasswords={visiblePasswords}
+              togglePassword={togglePassword}
+              onChangePasscode={handleChangePasscode}
+              onApproveUser={approveUser}
+              onExpelUser={expelUser}
+              onSetSubadmin={setSubadmin}
+              onClearRequest={clearPasswordRequest}
+              realtimeDatabaseReady={realtimeDatabaseReady}
+            />
+          </section>
+        </section>
+      )}
     </main>
   );
 }
 
-function AuthGate(props) {
+function CompactAuthPanel(props) {
   const {
-    authMode, setAuthMode, authMessage, loginForm, setLoginForm, signupForm, setSignupForm,
+    authMode, setAuthMode, close, authMessage, loginForm, setLoginForm, signupForm, setSignupForm,
     forgotName, setForgotName, visiblePasswords, togglePassword, onLogin, onSignup, onForgotRequest,
   } = props;
   return (
-    <main className="auth-shell">
-      <section className="auth-hero">
-        <img src="/assets/ps1-logo.jpg" alt="PS1 로고" />
-        <p>PKNU Social Welfare · Private Newsletter Studio</p>
-        <h1>PS1 NEWS NETTER</h1>
-        <span>가입 신청 후 승인된 사용자와 관리자만 입장할 수 있습니다.</span>
-      </section>
-      <section className="auth-card">
-        <div className="auth-tabs">
-          <button className={authMode === "login" ? "active" : ""} type="button" onClick={() => setAuthMode("login")}><LogIn size={17} />로그인</button>
-          <button className={authMode === "signup" ? "active" : ""} type="button" onClick={() => setAuthMode("signup")}><UserPlus size={17} />신규가입</button>
-          <button className={authMode === "forgot" ? "active" : ""} type="button" onClick={() => setAuthMode("forgot")}><KeyRound size={17} />비밀번호 찾기</button>
-        </div>
-        {authMode === "login" && (
-          <form className="auth-form" onSubmit={onLogin}>
-            <span className="eyebrow"><Lock size={16} /> 로그인 안내</span>
-            <h2>이름과 비밀번호로 입장</h2>
-            <p>{PASSCODE_NOTICE} 관리자 기본값은 이름 `PKNUNEWS`, 비밀번호 `50321004`입니다.</p>
-            <input value={loginForm.name} onChange={(event) => setLoginForm({ ...loginForm, name: event.target.value })} placeholder="이름" />
-            <PasswordField value={loginForm.passcode} onChange={(value) => setLoginForm({ ...loginForm, passcode: value })} visible={visiblePasswords.login} onToggle={() => togglePassword("login")} placeholder="숫자 8자리 비밀번호" />
-            <button className="primary" type="submit">입장하기</button>
-          </form>
-        )}
-        {authMode === "signup" && (
-          <form className="auth-form" onSubmit={onSignup}>
-            <span className="eyebrow"><UserPlus size={16} /> 신규가입 안내</span>
-            <h2>사용자 등록</h2>
-            <p>{PASSCODE_NOTICE} 가입 후 관리자 또는 부관리자 승인을 받아야 이용할 수 있습니다.</p>
-            <input value={signupForm.name} onChange={(event) => setSignupForm({ ...signupForm, name: event.target.value })} placeholder="이름" />
-            <select value={signupForm.studentYear} onChange={(event) => setSignupForm({ ...signupForm, studentYear: event.target.value })}>
-              {STUDENT_YEARS.map((year) => <option key={year} value={year}>{year}학번</option>)}
-            </select>
-            <PasswordField value={signupForm.passcode} onChange={(value) => setSignupForm({ ...signupForm, passcode: value })} visible={visiblePasswords.signup} onToggle={() => togglePassword("signup")} placeholder="숫자 8자리 비밀번호" />
-            <PasswordField value={signupForm.confirmPasscode} onChange={(value) => setSignupForm({ ...signupForm, confirmPasscode: value })} visible={visiblePasswords.signupConfirm} onToggle={() => togglePassword("signupConfirm")} placeholder="비밀번호 확인" />
-            <button className="primary" type="submit">가입 신청</button>
-          </form>
-        )}
-        {authMode === "forgot" && (
-          <form className="auth-form" onSubmit={onForgotRequest}>
-            <span className="eyebrow"><KeyRound size={16} /> 비밀번호 찾기</span>
-            <h2>관리자에게 확인 요청</h2>
-            <p>요청을 보낸 가입자의 비밀번호만 관리자가 확인할 수 있습니다.</p>
-            <input value={forgotName} onChange={(event) => setForgotName(event.target.value)} placeholder="가입한 이름" />
-            <button className="primary" type="submit">관리자에게 요청 보내기</button>
-          </form>
-        )}
-        {authMessage && <p className="auth-message">{authMessage}</p>}
-      </section>
-    </main>
+    <section className="compact-auth-panel">
+      <div className="auth-tabs">
+        <button className={authMode === "login" ? "active" : ""} type="button" onClick={() => setAuthMode("login")}><LogIn size={16} />로그인</button>
+        <button className={authMode === "signup" ? "active" : ""} type="button" onClick={() => setAuthMode("signup")}><UserPlus size={16} />신규가입</button>
+        <button className={authMode === "forgot" ? "active" : ""} type="button" onClick={() => setAuthMode("forgot")}><KeyRound size={16} />비밀번호 찾기</button>
+        <button type="button" onClick={close}>닫기</button>
+      </div>
+      {authMode === "login" && (
+        <form className="auth-form compact" onSubmit={onLogin}>
+          <span className="eyebrow"><Lock size={16} /> 제작자 로그인</span>
+          <p>{PASSCODE_NOTICE} 주 제작자 기본값은 `PKNUNEWS` / `50321004`입니다.</p>
+          <input value={loginForm.name} onChange={(event) => setLoginForm({ ...loginForm, name: event.target.value })} placeholder="이름" />
+          <PasswordField value={loginForm.passcode} onChange={(value) => setLoginForm({ ...loginForm, passcode: value })} visible={visiblePasswords.login} onToggle={() => togglePassword("login")} placeholder="숫자 8자리 비밀번호" />
+          <button className="primary" type="submit">제작실 입장</button>
+        </form>
+      )}
+      {authMode === "signup" && (
+        <form className="auth-form compact" onSubmit={onSignup}>
+          <span className="eyebrow"><UserPlus size={16} /> 제작자 신규가입</span>
+          <p>{PASSCODE_NOTICE} 신청 후 주 제작자 또는 부 제작자 승인이 필요합니다.</p>
+          <input value={signupForm.name} onChange={(event) => setSignupForm({ ...signupForm, name: event.target.value })} placeholder="이름" />
+          <select value={signupForm.studentYear} onChange={(event) => setSignupForm({ ...signupForm, studentYear: event.target.value })}>
+            {STUDENT_YEARS.map((year) => <option key={year} value={year}>{year}학번</option>)}
+          </select>
+          <PasswordField value={signupForm.passcode} onChange={(value) => setSignupForm({ ...signupForm, passcode: value })} visible={visiblePasswords.signup} onToggle={() => togglePassword("signup")} placeholder="숫자 8자리 비밀번호" />
+          <PasswordField value={signupForm.confirmPasscode} onChange={(value) => setSignupForm({ ...signupForm, confirmPasscode: value })} visible={visiblePasswords.signupConfirm} onToggle={() => togglePassword("signupConfirm")} placeholder="비밀번호 확인" />
+          <button className="primary" type="submit">제작자 신청</button>
+        </form>
+      )}
+      {authMode === "forgot" && (
+        <form className="auth-form compact" onSubmit={onForgotRequest}>
+          <span className="eyebrow"><KeyRound size={16} /> 비밀번호 찾기</span>
+          <p>요청을 보낸 제작자의 비밀번호만 주 제작자가 확인할 수 있습니다.</p>
+          <input value={forgotName} onChange={(event) => setForgotName(event.target.value)} placeholder="신청한 이름" />
+          <button className="primary" type="submit">확인 요청 보내기</button>
+        </form>
+      )}
+      {authMessage && <p className="auth-message">{authMessage}</p>}
+    </section>
   );
 }
 
@@ -482,7 +472,7 @@ function AccountPanel(props) {
   } = props;
   return (
     <aside id="account" className="login-box account-panel">
-      <span className="eyebrow"><UserRound size={16} /> 계정</span>
+      <span className="eyebrow"><UserRound size={16} /> 제작자 계정</span>
       <h3>{session.name}</h3>
       <p>{session.studentYear} · {roleLabel(session.role)}</p>
       <span className="muted">{realtimeDatabaseReady ? "Realtime Database 연결됨" : "로컬 저장 모드"}</span>
@@ -498,8 +488,8 @@ function AccountPanel(props) {
 
       {canApproveUsers && (
         <div className="request-box">
-          <strong>가입 승인 대기</strong>
-          <p>관리자와 부관리자만 가입자를 승인할 수 있습니다.</p>
+          <strong>제작자 승인 대기</strong>
+          <p>주 제작자와 부 제작자만 공동제작자를 승인할 수 있습니다.</p>
           {pendingUsers.length === 0 && <span className="muted">승인 대기자가 없습니다.</span>}
           {pendingUsers.map((user) => (
             <div className="request-item" key={user.id}>
@@ -512,15 +502,13 @@ function AccountPanel(props) {
 
       {isAdmin && (
         <div className="request-box">
-          <strong>사용자 관리</strong>
-          <p>강제 탈퇴는 관리자만 가능합니다. 부관리자는 최대 3명입니다. 현재 {subadminCount}명.</p>
-          {approvedUsers.length === 0 && <span className="muted">승인된 가입자가 없습니다.</span>}
+          <strong>제작자 관리</strong>
+          <p>강제 탈퇴는 주 제작자만 가능합니다. 부 제작자는 최대 3명입니다. 현재 {subadminCount}명.</p>
+          {approvedUsers.length === 0 && <span className="muted">승인된 공동제작자가 없습니다.</span>}
           {approvedUsers.map((user) => (
             <div className="request-item" key={user.id}>
               <span>{user.name} · {user.studentYear}학번 · {roleLabel(user.role)}</span>
-              <button type="button" onClick={() => onSetSubadmin(user.id, user.role !== "subadmin")}>
-                {user.role === "subadmin" ? "부관리자 해제" : "부관리자 지정"}
-              </button>
+              <button type="button" onClick={() => onSetSubadmin(user.id, user.role !== "subadmin")}>{user.role === "subadmin" ? "부 제작자 해제" : "부 제작자 지정"}</button>
               <button type="button" className="danger-inline" onClick={() => onExpelUser(user.id)}>강제 탈퇴</button>
             </div>
           ))}
@@ -530,7 +518,7 @@ function AccountPanel(props) {
       {isAdmin && (
         <div className="request-box">
           <strong>비밀번호 확인 요청</strong>
-          <p>요청한 가입자의 비밀번호만 표시됩니다.</p>
+          <p>요청한 제작자의 비밀번호만 표시됩니다.</p>
           {passwordRequests.length === 0 && <span className="muted">현재 요청이 없습니다.</span>}
           {passwordRequests.map((user) => (
             <div className="request-item" key={user.id}>
@@ -539,7 +527,7 @@ function AccountPanel(props) {
               <button type="button" onClick={() => onClearRequest(user.id)}>처리 완료</button>
             </div>
           ))}
-          <span className="muted">전체 가입자 {users.length}명</span>
+          <span className="muted">전체 제작자 {users.length}명</span>
         </div>
       )}
     </aside>
@@ -558,7 +546,11 @@ function PasswordField({ value, onChange, visible, onToggle, placeholder }) {
 function NewsletterView({ issue }) {
   return (
     <article className="newsletter">
-      <div className="masthead"><span>{issue.monthLabel}</span><h2>{issue.title}</h2><p>{issue.summary}</p></div>
+      <div className="masthead">
+        <span>{issue.monthLabel}</span>
+        <h2>{issue.title}</h2>
+        <p>{issue.summary}</p>
+      </div>
       <div className="section-nav">
         {SECTION_DEFS.map((section) => {
           const Icon = section.icon;
@@ -645,11 +637,7 @@ function validatePasscodePair(passcode, confirmPasscode) {
 
 function readUsers() {
   try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || "[]").map((user) => ({
-      ...user,
-      role: user.role || "user",
-      approved: Boolean(user.approved),
-    }));
+    return JSON.parse(localStorage.getItem(USERS_KEY) || "[]").map((user) => ({ ...user, role: user.role || "user", approved: Boolean(user.approved) }));
   } catch {
     return [];
   }
@@ -664,9 +652,9 @@ function readSession() {
 }
 
 function roleLabel(role) {
-  if (role === "admin") return "관리자";
-  if (role === "subadmin") return "부관리자";
-  return "가입자";
+  if (role === "admin") return "주 제작자";
+  if (role === "subadmin") return "부 제작자";
+  return "공동제작자";
 }
 
 function normalizeText(text) {
@@ -711,8 +699,8 @@ function extractEvents(text) {
 function createWelcomeIssue() {
   return {
     title: "PS1 NEWS LETTER",
-    edition: "운영 준비호",
-    monthLabel: "PDF 게재 대기",
+    edition: "PDF 게재 대기",
+    monthLabel: "공개 뉴스레터",
     summary: "사복뉴스페이퍼 PDF를 첨부하면 전공소식, 교수동정, 대학원 소식, 월별 전공 일정, 인터뷰, 사회복지 정보통으로 나누어 전시합니다.",
     sections: {
       major: ["학부생을 위한 전공 행사, 장학, 비교과, 모집 공지를 정리합니다."],
