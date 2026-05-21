@@ -10,6 +10,7 @@ import {
   KeyRound,
   LogIn,
   LogOut,
+  Newspaper,
   PanelTop,
   Search,
   ShieldCheck,
@@ -359,7 +360,7 @@ export default function App() {
           </div>
           <div className="operations" aria-label="제작 방식">
             <article><FileUp size={22} /><strong>PDF 첨부</strong><span>승인된 제작자는 뉴스레터 전시본을 만들 수 있습니다.</span></article>
-            <article><PanelTop size={22} /><strong>자동 전시</strong><span>텍스트를 영역별로 정리하고 페이지 이미지를 압축합니다.</span></article>
+            <article><PanelTop size={22} /><strong>PDF 이미지 전시</strong><span>PDF 페이지를 압축 이미지로 바꾸어 아래로 스크롤해 볼 수 있게 합니다.</span></article>
             <article><ShieldCheck size={22} /><strong>공개 게재</strong><span>게재 후 URL을 아는 누구나 볼 수 있습니다.</span></article>
           </div>
           <section className="admin-layout">
