@@ -66,6 +66,7 @@ export default function App() {
   const [extracted, setExtracted] = useState(null);
   const [status, setStatus] = useState("제작자는 PDF를 첨부해 뉴스레터 전시본을 만들 수 있습니다.");
   const [isBusy, setIsBusy] = useState(false);
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
   const [query, setQuery] = useState("");
 
   const isAdmin = session?.role === "admin";
@@ -246,6 +247,10 @@ export default function App() {
 
   async function handleFile(file) {
     if (!file || !canUseStudio) return;
+    if (file.type && file.type !== "application/pdf") {
+      setStatus("PDF 파일만 첨부할 수 있습니다.");
+      return;
+    }
     setIsBusy(true);
     setExtracted(null);
     setStatus("PDF를 읽고 있습니다. 텍스트와 페이지 이미지를 가볍게 변환하는 중입니다.");
@@ -259,6 +264,20 @@ export default function App() {
     } finally {
       setIsBusy(false);
     }
+  }
+
+  function handlePdfDrag(event, dragging) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isBusy) setIsDraggingPdf(dragging);
+  }
+
+  function handlePdfDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingPdf(false);
+    const file = event.dataTransfer.files?.[0];
+    handleFile(file);
   }
 
   async function handlePublish() {
@@ -375,10 +394,16 @@ export default function App() {
                 <h2>PDF를 올리면 공개 뉴스레터 전시본을 만듭니다</h2>
                 <p>{status}</p>
               </div>
-              <label className={isBusy ? "drop disabled" : "drop"}>
+              <label
+                className={`${isBusy ? "drop disabled" : "drop"}${isDraggingPdf ? " dragging" : ""}`}
+                onDragEnter={(event) => handlePdfDrag(event, true)}
+                onDragOver={(event) => handlePdfDrag(event, true)}
+                onDragLeave={(event) => handlePdfDrag(event, false)}
+                onDrop={handlePdfDrop}
+              >
                 <FileUp size={42} />
                 <strong>PDF 선택</strong>
-                <span>승인 전까지 원본 PDF는 서버에 저장하지 않습니다.</span>
+                <span>클릭하거나 PDF 파일을 이 영역으로 드래그하세요. 승인 전까지 원본 PDF는 서버에 저장하지 않습니다.</span>
                 <input type="file" accept="application/pdf" disabled={isBusy} onChange={(event) => handleFile(event.target.files?.[0])} />
               </label>
               {extracted && (

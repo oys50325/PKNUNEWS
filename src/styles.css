@@ -299,6 +299,13 @@ p {
   color: var(--navy);
   background: #f2f9fd;
   text-align: center;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.drop.dragging {
+  border-color: var(--blue);
+  background: #e5f4fb;
+  transform: translateY(-2px);
 }
 
 .drop input {
