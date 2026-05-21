@@ -50,8 +50,8 @@ export async function logoutAdmin() {
 }
 
 export async function listIssues() {
+  if (realtimeDatabaseReady) return readRealtimeIssues();
   if (!firebaseReady) {
-    if (realtimeDatabaseReady) return readRealtimeIssues();
     return readLocalIssues();
   }
   const { db, firestoreApi } = await getServices();
@@ -84,8 +84,8 @@ export async function saveUsers(users) {
 }
 
 export async function publishIssue(issue) {
+  if (realtimeDatabaseReady) return saveRealtimeIssue(issue);
   if (!firebaseReady) {
-    if (realtimeDatabaseReady) return saveRealtimeIssue(issue);
     return saveLocalIssue(issue);
   }
   const { db, storage, firestoreApi, storageApi } = await getServices();
@@ -133,11 +133,11 @@ export async function publishIssue(issue) {
 }
 
 export async function removeIssue(issue) {
+  if (realtimeDatabaseReady) {
+    await writeRealtime(`newsletters/${issue.id}`, null);
+    return;
+  }
   if (!firebaseReady) {
-    if (realtimeDatabaseReady) {
-      await writeRealtime(`newsletters/${issue.id}`, null);
-      return;
-    }
     const next = readLocalIssues().filter((item) => item.id !== issue.id);
     localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
     return;
