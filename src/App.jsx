@@ -11,7 +11,6 @@ import {
   GraduationCap,
   Info,
   KeyRound,
-  Lock,
   LogIn,
   LogOut,
   Newspaper,
@@ -431,8 +430,6 @@ function CompactAuthPanel(props) {
       </div>
       {authMode === "login" && (
         <form className="auth-form compact" onSubmit={onLogin}>
-          <span className="eyebrow"><Lock size={16} /> 제작자 로그인</span>
-          <p>{PASSCODE_NOTICE} 주 제작자 기본값은 `PKNUNEWS` / `50321004`입니다.</p>
           <input value={loginForm.name} onChange={(event) => setLoginForm({ ...loginForm, name: event.target.value })} placeholder="이름" />
           <PasswordField value={loginForm.passcode} onChange={(value) => setLoginForm({ ...loginForm, passcode: value })} visible={visiblePasswords.login} onToggle={() => togglePassword("login")} placeholder="숫자 8자리 비밀번호" />
           <button className="primary" type="submit">제작실 입장</button>
