@@ -2,18 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
   BookOpenText,
-  CalendarDays,
   CheckCircle2,
-  Download,
   Eye,
   EyeOff,
   FileUp,
-  GraduationCap,
-  Info,
   KeyRound,
   LogIn,
   LogOut,
-  Newspaper,
   PanelTop,
   Search,
   ShieldCheck,
@@ -22,7 +17,6 @@ import {
   UserCheck,
   UserPlus,
   UserRound,
-  UsersRound,
 } from "lucide-react";
 import { listIssues, listUsers, publishIssue, realtimeDatabaseReady, removeIssue, saveUsers } from "./firebase.js";
 
@@ -38,32 +32,6 @@ const USERS_KEY = "ps1-news-netter-users";
 const SESSION_KEY = "ps1-news-netter-session";
 const PASSCODE_NOTICE = "비밀번호는 숫자 8자리입니다.";
 const SUBADMIN_LIMIT = 3;
-const OCR_MIN_READABLE_UNITS = 3;
-
-const SECTION_DEFS = [
-  { key: "major", label: "전공소식", icon: Newspaper, hints: ["전공소식", "학부", "학생", "비교과", "장학", "모집", "참여", "활동"] },
-  { key: "faculty", label: "교수동정", icon: UserRound, hints: ["교수동정", "교수", "연구", "논문", "학회", "수상", "발표", "기고"] },
-  { key: "graduate", label: "대학원 소식", icon: GraduationCap, hints: ["대학원", "글로벌정책대학원", "일반대학원", "석사", "박사", "논문"] },
-  { key: "calendar", label: "월별 전공 일정", icon: CalendarDays, hints: ["일정", "달력", "학사", "행사", "월별"] },
-  { key: "interview", label: "복 들어오는 인터뷰", icon: UsersRound, hints: ["인터뷰", "복 들어오는", "동문", "재학생", "졸업생"] },
-  { key: "info", label: "알기 쉬운 사회복지 정보통", icon: Info, hints: ["사회복지 정보통", "알기 쉬운", "정책", "제도", "복지정보", "사회복지"] },
-];
-
-const SECTION_HEADING_ALIASES = {
-  major: ["전공소식", "전공 소식", "학부 소식"],
-  faculty: ["교수동정", "교수 동정", "교수님 소식"],
-  graduate: ["대학원 소식", "대학원소식", "일반대학원", "글로벌정책대학원"],
-  calendar: ["월별 전공 일정", "월별전공일정", "전공 일정", "일정"],
-  interview: ["복 들어오는 인터뷰", "복들어오는인터뷰", "인터뷰"],
-  info: ["알기 쉬운 사회복지 정보통", "알기쉬운사회복지정보통", "사회복지 정보통", "정보통"],
-};
-
-const SAMPLE_EVENTS = [
-  { date: "6.03", title: "전공 뉴스레터 원고 마감" },
-  { date: "6.12", title: "복 들어오는 인터뷰 촬영" },
-  { date: "6.24", title: "PS1 NEWS LETTER 발행" },
-];
-
 const STUDENT_YEARS = Array.from({ length: 41 }, (_, index) => String(2010 + index));
 
 export default function App() {
@@ -302,33 +270,6 @@ export default function App() {
     }
   }
 
-  function updateExtractedSection(key, value) {
-    const lines = value
-      .split(/\n{2,}|\n/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-    setExtracted((current) =>
-      current
-        ? {
-            ...current,
-            sections: { ...current.sections, [key]: lines },
-          }
-        : current,
-    );
-  }
-
-  function updateExtractedEvents(value) {
-    const events = value
-      .split(/\n+/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .map((item) => {
-        const match = item.match(/^(\d{1,2}[./]\d{1,2})\s+(.+)$/);
-        return match ? { date: match[1].replace("/", "."), title: match[2].trim() } : { date: "", title: item };
-      });
-    setExtracted((current) => (current ? { ...current, events: events.length ? events : SAMPLE_EVENTS } : current));
-  }
-
   async function handleRemove(issue) {
     if (!isAdmin) return;
     setIsBusy(true);
@@ -440,17 +381,10 @@ export default function App() {
                 <input type="file" accept="application/pdf" disabled={isBusy} onChange={(event) => handleFile(event.target.files?.[0])} />
               </label>
               {extracted && (
-                <>
-                  <ExtractedEditor
-                    issue={extracted}
-                    onSectionChange={updateExtractedSection}
-                    onEventsChange={updateExtractedEvents}
-                  />
-                  <div className="approval-row">
-                    <button className="primary" type="button" disabled={isBusy} onClick={handlePublish}><CheckCircle2 size={18} />최종 승인 및 공개 게재</button>
-                    <button className="ghost" type="button" disabled={isBusy} onClick={() => setExtracted(null)}><Trash2 size={18} />미리보기 삭제</button>
-                  </div>
-                </>
+                <div className="approval-row">
+                  <button className="primary" type="button" disabled={isBusy} onClick={handlePublish}><CheckCircle2 size={18} />최종 승인 및 공개 게재</button>
+                  <button className="ghost" type="button" disabled={isBusy} onClick={() => setExtracted(null)}><Trash2 size={18} />미리보기 삭제</button>
+                </div>
               )}
             </div>
             <AccountPanel
@@ -477,38 +411,6 @@ export default function App() {
         </section>
       )}
     </main>
-  );
-}
-
-function ExtractedEditor({ issue, onSectionChange, onEventsChange }) {
-  return (
-    <section className="extracted-editor">
-      <div>
-        <span className="eyebrow"><Sparkles size={16} /> 자동 정리 확인</span>
-        <h3>공개 전에 영역별 내용을 확인하세요</h3>
-        <p>{issue.extractionNote || "PDF에서 읽은 내용을 영역별로 나눴습니다. 부족한 부분은 직접 수정한 뒤 공개 게재할 수 있습니다."}</p>
-      </div>
-      <div className="editor-grid">
-        {SECTION_DEFS.filter((section) => section.key !== "calendar").map((section) => (
-          <label className="editor-field" key={section.key}>
-            <span>{section.label}</span>
-            <textarea
-              value={(issue.sections?.[section.key] || []).join("\n")}
-              onChange={(event) => onSectionChange(section.key, event.target.value)}
-              placeholder={`${section.label}에 들어갈 내용을 한 줄에 하나씩 입력하세요.`}
-            />
-          </label>
-        ))}
-        <label className="editor-field">
-          <span>월별 전공 일정</span>
-          <textarea
-            value={(issue.events || []).map((event) => `${event.date} ${event.title}`.trim()).join("\n")}
-            onChange={(event) => onEventsChange(event.target.value)}
-            placeholder="6.03 전공 뉴스레터 원고 마감"
-          />
-        </label>
-      </div>
-    </section>
   );
 }
 
@@ -621,51 +523,30 @@ function NewsletterView({ issue }) {
   const [zoomedPage, setZoomedPage] = useState(null);
   return (
     <article className="newsletter">
-      <div className="masthead"><span>{issue.monthLabel}</span><h2>{issue.title}</h2><p>{issue.summary}</p></div>
-      <div className="section-nav">{SECTION_DEFS.map((section) => { const Icon = section.icon; return <a key={section.key} href={`#${section.key}`}><Icon size={17} />{section.label}</a>; })}</div>
-      <div className="content-grid">
-        {SECTION_DEFS.map((section) => {
-          const Icon = section.icon;
-          const content = issue.sections?.[section.key] || [];
-          return (
-            <section key={section.key} id={section.key} className="news-section">
-              <div className="section-label"><Icon size={22} /><h3>{section.label}</h3></div>
-              {section.key === "calendar" ? <EventList events={issue.events} /> : (
-                <div className="story-list">
-                  {content.slice(0, 6).map((text, index) => <p key={`${section.key}-${index}`}>{text}</p>)}
-                  {content.length === 0 && <p>PDF에서 이 영역의 내용을 찾으면 자동으로 여기에 정리됩니다.</p>}
-                </div>
-              )}
-            </section>
-          );
-        })}
-      </div>
-      {Boolean(issue.pages?.length) && (
-        <div className="pages">
-          <div className="section-label"><Download size={22} /><h3>PDF 전시 이미지</h3></div>
-          <div className="page-strip">
-            {(issue.pages || []).slice(0, 8).map((page) => (
-              <button className="page-thumb" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
-                <img
-                  src={page.url}
-                  alt={`${issue.title} ${page.number}쪽`}
-                  loading="lazy"
-                  onError={(event) => event.currentTarget.closest(".page-thumb")?.classList.add("image-error")}
-                />
-                <em className="page-fallback">이미지를 다시 게재해야 합니다</em>
-                <span>{page.number}쪽 · {formatBytes(page.size)}</span>
-              </button>
-            ))}
+      <div className="masthead"><span>{issue.monthLabel}</span><h2>{issue.title}</h2><p>PDF 이미지를 아래로 내리면서 볼 수 있습니다.</p></div>
+      <div className="pdf-scroll">
+        {issue.pages?.length ? (
+          issue.pages.map((page) => (
+            <button className="pdf-page" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
+              <img
+                src={page.url}
+                alt={`${issue.title} ${page.number}쪽`}
+                loading="lazy"
+                onError={(event) => event.currentTarget.closest(".pdf-page")?.classList.add("image-error")}
+              />
+              <em className="page-fallback">이미지를 다시 게재해야 합니다</em>
+            </button>
+          ))
+        ) : (
+          <div className="empty-pdf">
+            <Download size={28} />
+            <strong>아직 게재된 PDF 이미지가 없습니다.</strong>
           </div>
-        </div>
-      )}
+        )}
+      </div>
       {zoomedPage && <div className="page-modal" role="dialog" aria-modal="true" aria-label={`${zoomedPage.number}쪽 확대 보기`} onClick={() => setZoomedPage(null)}><div className="page-modal-inner" onClick={(event) => event.stopPropagation()}><button className="modal-close" type="button" onClick={() => setZoomedPage(null)}>닫기</button><img src={zoomedPage.url} alt={`${issue.title} ${zoomedPage.number}쪽 확대`} /></div></div>}
     </article>
   );
-}
-
-function EventList({ events = SAMPLE_EVENTS }) {
-  return <div className="event-list">{events.map((event, index) => <div key={`${event.date}-${index}`}><time>{event.date}</time><span>{event.title}</span></div>)}</div>;
 }
 
 async function extractNewsletter(file, updateStatus) {
@@ -675,35 +556,12 @@ async function extractNewsletter(file, updateStatus) {
   const data = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: data.slice(0) }).promise;
   const pages = [];
-  const texts = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    updateStatus(`${pdf.numPages}쪽 중 ${pageNumber}쪽을 읽는 중입니다.`);
+    updateStatus(`${pdf.numPages}쪽 중 ${pageNumber}쪽을 이미지로 만드는 중입니다.`);
     const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
-    texts.push(textContent.items.map((item) => item.str).join(" "));
     pages.push(await renderCompressedPage(page, pageNumber));
   }
-  let fullText = normalizeText(texts.join("\n"));
-  let pageTexts = texts.map((text) => normalizeText(text));
-  const readableUnits = splitIntoReadableUnits(fullText);
-  let usedOcr = false;
-  if (readableUnits.length < OCR_MIN_READABLE_UNITS) {
-    updateStatus("PDF가 이미지형으로 보입니다. OCR로 글자를 읽는 중입니다. 시간이 조금 걸릴 수 있습니다.");
-    const ocrTexts = await ocrPdfPages(pdf, updateStatus);
-    const ocrFullText = normalizeText(ocrTexts.join("\n"));
-    if (ocrFullText.length > fullText.length) {
-      fullText = ocrFullText;
-      pageTexts = ocrTexts.map((text) => normalizeText(text));
-      usedOcr = true;
-    }
-  }
-  const extractionNote =
-    splitIntoReadableUnits(fullText).length < OCR_MIN_READABLE_UNITS
-      ? "이 PDF는 이미지형이거나 글자 인식이 어려워 자동 정리가 제한됩니다. 아래 칸에 뉴스 내용을 직접 보완한 뒤 공개 게재하세요."
-      : usedOcr
-        ? "이미지형 PDF에서 OCR로 글자를 읽어 자동 분류했습니다. 공개 전에 문장과 분류를 확인하세요."
-      : "PDF에서 읽은 내용을 자동으로 나눴습니다. 공개 전에 문장과 분류를 확인하세요.";
-  return { title: guessTitle(fullText), edition: guessEdition(fullText, file.name), monthLabel: guessMonthLabel(fullText), summary: makeSummary(fullText), sections: classifySections(fullText, pageTexts), events: extractEvents(fullText), pages, sourceFileName: file.name, pageCount: pdf.numPages, extractionNote };
+  return { title: "PS1 NEWS LETTER", edition: guessEdition(file.name), monthLabel: guessMonthLabel(), summary: "", sections: {}, events: [], pages, sourceFileName: file.name, pageCount: pdf.numPages };
 }
 
 async function renderCompressedPage(page, pageNumber) {
@@ -714,32 +572,6 @@ async function renderCompressedPage(page, pageNumber) {
   canvas.width = 1;
   canvas.height = 1;
   return result;
-}
-
-async function ocrPdfPages(pdf, updateStatus) {
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker(["kor", "eng"], 1, {
-    logger: (message) => {
-      if (message.status === "recognizing text") {
-        updateStatus(`OCR로 글자를 읽는 중입니다. ${Math.round((message.progress || 0) * 100)}%`);
-      }
-    },
-  });
-  const results = [];
-  try {
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      updateStatus(`${pdf.numPages}쪽 중 ${pageNumber}쪽을 OCR로 읽는 중입니다.`);
-      const page = await pdf.getPage(pageNumber);
-      const canvas = await renderPageCanvas(page, 2);
-      const result = await worker.recognize(canvas);
-      results.push(result.data?.text || "");
-      canvas.width = 1;
-      canvas.height = 1;
-    }
-  } finally {
-    await worker.terminate();
-  }
-  return results;
 }
 
 async function renderPageCanvas(page, scale) {
@@ -789,141 +621,15 @@ function roleLabel(role) {
   return "공동제작자";
 }
 
-function normalizeText(text) {
-  return text.replace(/\s+/g, " ").replace(/([.!?。])\s/g, "$1\n").trim();
-}
-
-function guessTitle(text) {
-  const firstLine = text.split("\n").find((line) => line.length > 8 && line.length < 80);
-  if (firstLine?.includes("PS1")) return firstLine;
-  return "PS1 NEWS LETTER";
-}
-
-function guessEdition(text, fileName) {
-  const edition = text.match(/(?:제\s*)?\d+\s*호|vol\.?\s*\d+|no\.?\s*\d+/i)?.[0];
+function guessEdition(fileName) {
+  const edition = fileName.match(/(?:제\s*)?\d+\s*호|vol\.?\s*\d+|no\.?\s*\d+/i)?.[0];
   if (edition) return edition.replace(/\s+/g, " ");
   const fileEdition = fileName.match(/\d{1,3}/)?.[0];
   return fileEdition ? `제${fileEdition}호` : "새 뉴스레터";
 }
 
-function guessMonthLabel(text) {
-  const match = text.match(/20\d{2}\s*[.\-/년]\s*\d{1,2}\s*(?:월)?/);
-  if (match) return match[0].replace(/\s+/g, " ");
+function guessMonthLabel() {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long" }).format(new Date());
-}
-
-function makeSummary(text) {
-  const sentences = text.split(/[.!?。]\s*/).filter((sentence) => sentence.length > 18);
-  return (sentences.slice(0, 2).join(". ") || "이번 호의 주요 소식과 전공 일정을 한눈에 볼 수 있습니다.").slice(0, 220);
-}
-
-function classifySections(text, pageTexts = []) {
-  const sections = Object.fromEntries(SECTION_DEFS.map((section) => [section.key, []]));
-  const headingSections = classifyByHeadings(text);
-  Object.entries(headingSections).forEach(([key, items]) => {
-    sections[key] = items;
-  });
-
-  const units = splitIntoReadableUnits(text);
-  const used = new Set();
-  units.forEach((unit, index) => {
-    const key = bestSectionForText(unit);
-    if (!key || key === "calendar" || sections[key].length >= 6 || sectionAlreadyIncludes(sections[key], unit)) return;
-    sections[key].push(unit);
-    used.add(index);
-  });
-  const unassigned = units.filter((_, index) => !used.has(index));
-  const fillKeys = ["major", "faculty", "graduate", "interview", "info"];
-  fillKeys.forEach((key, index) => {
-    if (sections[key].length > 0) return;
-    const pageCandidate = pageTexts[index + 1] || pageTexts[index] || "";
-    const pageUnits = splitIntoReadableUnits(pageCandidate);
-    const fallback = pageUnits[0] || unassigned.shift();
-    if (fallback) sections[key].push(fallback);
-  });
-  unassigned.forEach((unit, index) => {
-    const key = fillKeys[index % fillKeys.length];
-    if (sections[key].length < 6 && !sectionAlreadyIncludes(sections[key], unit)) sections[key].push(unit);
-  });
-  return sections;
-}
-
-function classifyByHeadings(text) {
-  const sections = {};
-  const markers = findSectionMarkers(text);
-  markers.forEach((marker, index) => {
-    if (marker.key === "calendar") return;
-    const nextMarker = markers.slice(index + 1).find((item) => item.index > marker.index);
-    const block = text.slice(marker.end, nextMarker?.index || text.length);
-    const items = splitIntoReadableUnits(block).filter((item) => !looksLikeSectionHeading(item));
-    if (items.length > 0) sections[marker.key] = items.slice(0, 6);
-  });
-  return sections;
-}
-
-function findSectionMarkers(text) {
-  const markers = [];
-  Object.entries(SECTION_HEADING_ALIASES).forEach(([key, aliases]) => {
-    aliases.forEach((alias) => {
-      let fromIndex = 0;
-      while (fromIndex < text.length) {
-        const index = text.indexOf(alias, fromIndex);
-        if (index < 0) break;
-        markers.push({ key, index, end: index + alias.length, alias });
-        fromIndex = index + alias.length;
-      }
-    });
-  });
-  return markers
-    .sort((a, b) => a.index - b.index || b.alias.length - a.alias.length)
-    .filter((marker, index, all) => index === 0 || Math.abs(marker.index - all[index - 1].index) > 3);
-}
-
-function looksLikeSectionHeading(text) {
-  const compact = text.replace(/\s+/g, "");
-  return Object.values(SECTION_HEADING_ALIASES).flat().some((alias) => compact === alias.replace(/\s+/g, ""));
-}
-
-function sectionAlreadyIncludes(items, unit) {
-  const compactUnit = unit.replace(/\s+/g, "");
-  return items.some((item) => {
-    const compactItem = item.replace(/\s+/g, "");
-    return compactItem.includes(compactUnit.slice(0, 30)) || compactUnit.includes(compactItem.slice(0, 30));
-  });
-}
-
-function bestSectionForText(text) {
-  let best = { key: "", score: 0 };
-  SECTION_DEFS.forEach((section) => {
-    const score = section.hints.reduce((total, hint) => total + (text.includes(hint) ? 2 : 0), 0);
-    if (score > best.score) best = { key: section.key, score };
-  });
-  return best.score > 0 ? best.key : "";
-}
-
-function splitIntoReadableUnits(text) {
-  const cleaned = text
-    .replace(/\s+/g, " ")
-    .replace(/([.!?。])\s+/g, "$1|")
-    .split("|")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 24)
-    .map((item) => item.replace(/^[-•·\d.\s]+/, "").trim())
-    .filter(Boolean);
-  if (cleaned.length > 0) return cleaned.map((item) => item.slice(0, 260));
-  const chunks = [];
-  const words = text.replace(/\s+/g, " ").trim().split(" ");
-  for (let index = 0; index < words.length; index += 32) {
-    const chunk = words.slice(index, index + 32).join(" ").trim();
-    if (chunk.length > 24) chunks.push(chunk.slice(0, 260));
-  }
-  return chunks;
-}
-
-function extractEvents(text) {
-  const matches = [...text.matchAll(/(\d{1,2}[./]\d{1,2})\s*([^.\n]{4,36})/g)];
-  const events = matches.slice(0, 6).map((match) => ({ date: match[1].replace("/", "."), title: match[2].trim() }));
-  return events.length ? events : SAMPLE_EVENTS;
 }
 
 function createWelcomeIssue() {
@@ -931,15 +637,9 @@ function createWelcomeIssue() {
     title: "PS1 NEWS LETTER",
     edition: "PDF 게재 대기",
     monthLabel: "공개 뉴스레터",
-    summary: "사복뉴스페이퍼 PDF를 첨부하면 전공소식, 교수동정, 대학원 소식, 월별 전공 일정, 인터뷰, 사회복지 정보통으로 나누어 전시합니다.",
-    sections: {
-      major: ["학부생을 위한 전공 행사, 장학, 비교과, 모집 공지를 정리합니다."],
-      faculty: ["교수님의 연구, 학회, 수상, 언론 기고 등 주요 동정을 모읍니다."],
-      graduate: ["일반대학원과 글로벌정책대학원의 학사 및 연구 소식을 담습니다."],
-      interview: ["재학생, 동문, 교수님을 만나는 복 들어오는 인터뷰 영역입니다."],
-      info: ["알기 쉬운 사회복지 정책과 제도 정보를 카드형으로 제공합니다."],
-    },
-    events: SAMPLE_EVENTS,
+    summary: "",
+    sections: {},
+    events: [],
     pages: [],
     pageCount: 0,
   };
