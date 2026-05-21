@@ -249,6 +249,7 @@ p {
 .admin-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
+  align-items: start;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -256,6 +257,7 @@ p {
 .upload-zone,
 .login-box {
   display: grid;
+  align-content: start;
   gap: 16px;
   padding: 22px;
 }
@@ -284,6 +286,7 @@ p {
 .upload-zone p,
 .login-box p,
 .masthead p {
+  margin-bottom: 0;
   color: var(--muted);
   line-height: 1.65;
 }
@@ -292,7 +295,7 @@ p {
   display: grid;
   place-items: center;
   gap: 9px;
-  min-height: 210px;
+  min-height: 170px;
   border: 3px dashed #9fc7dd;
   border-radius: 8px;
   padding: 24px;
@@ -326,6 +329,60 @@ p {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.extracted-editor {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  background: #fbfdff;
+}
+
+.extracted-editor h3 {
+  margin-bottom: 8px;
+  color: var(--navy);
+  font-size: 22px;
+}
+
+.extracted-editor p {
+  margin-bottom: 0;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.editor-field {
+  display: grid;
+  gap: 8px;
+}
+
+.editor-field span {
+  color: var(--navy);
+  font-weight: 950;
+}
+
+.editor-field textarea {
+  width: 100%;
+  min-height: 130px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  line-height: 1.55;
+  outline: none;
+}
+
+.editor-field textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(57, 169, 214, 0.16);
 }
 
 input {
@@ -421,17 +478,19 @@ input:focus {
 }
 
 .content-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--line);
+  display: block;
+  background: #fff;
 }
 
 .news-section,
 .pages {
-  min-height: 260px;
+  min-height: 0;
   padding: 24px;
   background: #fff;
+}
+
+.news-section {
+  border-bottom: 1px solid var(--line);
 }
 
 .section-label {
@@ -510,6 +569,26 @@ input:focus {
   aspect-ratio: 0.72;
   object-fit: cover;
   object-position: top;
+}
+
+.page-fallback {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 250px;
+  padding: 18px;
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 900;
+  text-align: center;
+}
+
+.page-thumb.image-error img {
+  display: none;
+}
+
+.page-thumb.image-error .page-fallback {
+  display: flex;
 }
 
 .page-thumb span {
@@ -638,6 +717,10 @@ input:focus {
   }
 
   .operations {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-grid {
     grid-template-columns: 1fr;
   }
 

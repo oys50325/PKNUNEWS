@@ -50,7 +50,10 @@ export async function logoutAdmin() {
 }
 
 export async function listIssues() {
-  if (!firebaseReady) return readLocalIssues();
+  if (!firebaseReady) {
+    if (realtimeDatabaseReady) return readRealtimeIssues();
+    return readLocalIssues();
+  }
   const { db, firestoreApi } = await getServices();
   const snapshot = await firestoreApi.getDocs(
     firestoreApi.query(
@@ -81,7 +84,10 @@ export async function saveUsers(users) {
 }
 
 export async function publishIssue(issue) {
-  if (!firebaseReady) return saveLocalIssue(issue);
+  if (!firebaseReady) {
+    if (realtimeDatabaseReady) return saveRealtimeIssue(issue);
+    return saveLocalIssue(issue);
+  }
   const { db, storage, firestoreApi, storageApi } = await getServices();
   await ensureSignedIn();
 
@@ -122,6 +128,10 @@ export async function publishIssue(issue) {
 
 export async function removeIssue(issue) {
   if (!firebaseReady) {
+    if (realtimeDatabaseReady) {
+      await writeRealtime(`newsletters/${issue.id}`, null);
+      return;
+    }
     const next = readLocalIssues().filter((item) => item.id !== issue.id);
     localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
     return;
@@ -188,22 +198,49 @@ function readLocalIssues() {
   }
 }
 
+async function readRealtimeIssues() {
+  const data = await readRealtime("newsletters");
+  if (!data) return [];
+  return Object.entries(data)
+    .map(([id, issue]) => ({ id, ...issue }))
+    .sort((a, b) => String(b.publishedAt || "").localeCompare(String(a.publishedAt || "")));
+}
+
+async function saveRealtimeIssue(issue) {
+  const id = issue.id || crypto.randomUUID();
+  const saved = serializeIssue(issue, id);
+  await writeRealtime(`newsletters/${id}`, saved);
+  return saved;
+}
+
 function saveLocalIssue(issue) {
-  const saved = {
-    ...issue,
-    id: crypto.randomUUID(),
-    pages: issue.pages.map((page, index) => ({
-      number: index + 1,
-      url: page.url,
-      width: page.width,
-      height: page.height,
-      size: page.blob.size,
-    })),
-    publishedAt: new Date().toISOString(),
-  };
+  const saved = serializeIssue(issue, crypto.randomUUID());
   const next = [saved, ...readLocalIssues()].slice(0, 12);
   localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
   return saved;
+}
+
+function serializeIssue(issue, id) {
+  return stripUndefined({
+    id,
+    title: issue.title,
+    edition: issue.edition,
+    monthLabel: issue.monthLabel,
+    summary: issue.summary,
+    sections: issue.sections,
+    events: issue.events,
+    sourceFileName: issue.sourceFileName,
+    pageCount: issue.pages?.length || 0,
+    pages: (issue.pages || []).map((page, index) => ({
+      number: page.number || index + 1,
+      url: page.url,
+      width: page.width,
+      height: page.height,
+      size: page.size || page.blob?.size || 0,
+    })),
+    storageMode: "compressed-inline-page-images",
+    publishedAt: new Date().toISOString(),
+  });
 }
 
 function readLocalUsers() {

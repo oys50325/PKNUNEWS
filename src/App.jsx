@@ -292,6 +292,33 @@ export default function App() {
     }
   }
 
+  function updateExtractedSection(key, value) {
+    const lines = value
+      .split(/\n{2,}|\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    setExtracted((current) =>
+      current
+        ? {
+            ...current,
+            sections: { ...current.sections, [key]: lines },
+          }
+        : current,
+    );
+  }
+
+  function updateExtractedEvents(value) {
+    const events = value
+      .split(/\n+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => {
+        const match = item.match(/^(\d{1,2}[./]\d{1,2})\s+(.+)$/);
+        return match ? { date: match[1].replace("/", "."), title: match[2].trim() } : { date: "", title: item };
+      });
+    setExtracted((current) => (current ? { ...current, events: events.length ? events : SAMPLE_EVENTS } : current));
+  }
+
   async function handleRemove(issue) {
     if (!isAdmin) return;
     setIsBusy(true);
@@ -403,10 +430,17 @@ export default function App() {
                 <input type="file" accept="application/pdf" disabled={isBusy} onChange={(event) => handleFile(event.target.files?.[0])} />
               </label>
               {extracted && (
-                <div className="approval-row">
-                  <button className="primary" type="button" disabled={isBusy} onClick={handlePublish}><CheckCircle2 size={18} />최종 승인 및 공개 게재</button>
-                  <button className="ghost" type="button" disabled={isBusy} onClick={() => setExtracted(null)}><Trash2 size={18} />미리보기 삭제</button>
-                </div>
+                <>
+                  <ExtractedEditor
+                    issue={extracted}
+                    onSectionChange={updateExtractedSection}
+                    onEventsChange={updateExtractedEvents}
+                  />
+                  <div className="approval-row">
+                    <button className="primary" type="button" disabled={isBusy} onClick={handlePublish}><CheckCircle2 size={18} />최종 승인 및 공개 게재</button>
+                    <button className="ghost" type="button" disabled={isBusy} onClick={() => setExtracted(null)}><Trash2 size={18} />미리보기 삭제</button>
+                  </div>
+                </>
               )}
             </div>
             <AccountPanel
@@ -433,6 +467,38 @@ export default function App() {
         </section>
       )}
     </main>
+  );
+}
+
+function ExtractedEditor({ issue, onSectionChange, onEventsChange }) {
+  return (
+    <section className="extracted-editor">
+      <div>
+        <span className="eyebrow"><Sparkles size={16} /> 자동 정리 확인</span>
+        <h3>공개 전에 영역별 내용을 확인하세요</h3>
+        <p>{issue.extractionNote || "PDF에서 읽은 내용을 영역별로 나눴습니다. 부족한 부분은 직접 수정한 뒤 공개 게재할 수 있습니다."}</p>
+      </div>
+      <div className="editor-grid">
+        {SECTION_DEFS.filter((section) => section.key !== "calendar").map((section) => (
+          <label className="editor-field" key={section.key}>
+            <span>{section.label}</span>
+            <textarea
+              value={(issue.sections?.[section.key] || []).join("\n")}
+              onChange={(event) => onSectionChange(section.key, event.target.value)}
+              placeholder={`${section.label}에 들어갈 내용을 한 줄에 하나씩 입력하세요.`}
+            />
+          </label>
+        ))}
+        <label className="editor-field">
+          <span>월별 전공 일정</span>
+          <textarea
+            value={(issue.events || []).map((event) => `${event.date} ${event.title}`.trim()).join("\n")}
+            onChange={(event) => onEventsChange(event.target.value)}
+            placeholder="6.03 전공 뉴스레터 원고 마감"
+          />
+        </label>
+      </div>
+    </section>
   );
 }
 
@@ -568,7 +634,16 @@ function NewsletterView({ issue }) {
         <div className="section-label"><Download size={22} /><h3>원본 PDF 페이지</h3></div>
         <div className="page-strip">
           {(issue.pages || []).slice(0, 8).map((page) => (
-            <button className="page-thumb" type="button" key={page.number} onClick={() => setZoomedPage(page)}><img src={page.url} alt={`${issue.title} ${page.number}쪽`} loading="lazy" /><span>{page.number}쪽 · {formatBytes(page.size)}</span></button>
+            <button className="page-thumb" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
+              <img
+                src={page.url}
+                alt={`${issue.title} ${page.number}쪽`}
+                loading="lazy"
+                onError={(event) => event.currentTarget.closest(".page-thumb")?.classList.add("image-error")}
+              />
+              <em className="page-fallback">이미지를 다시 게재해야 합니다</em>
+              <span>{page.number}쪽 · {formatBytes(page.size)}</span>
+            </button>
           ))}
         </div>
       </div>
@@ -598,7 +673,12 @@ async function extractNewsletter(file, updateStatus) {
   }
   const fullText = normalizeText(texts.join("\n"));
   const pageTexts = texts.map((text) => normalizeText(text));
-  return { title: guessTitle(fullText), edition: guessEdition(fullText, file.name), monthLabel: guessMonthLabel(fullText), summary: makeSummary(fullText), sections: classifySections(fullText, pageTexts), events: extractEvents(fullText), pages, sourceFileName: file.name };
+  const readableUnits = splitIntoReadableUnits(fullText);
+  const extractionNote =
+    readableUnits.length < 3
+      ? "이 PDF는 이미지형이거나 텍스트가 적어서 자동 정리가 제한됩니다. 아래 칸에 뉴스 내용을 직접 보완한 뒤 공개 게재하세요."
+      : "PDF에서 읽은 내용을 자동으로 나눴습니다. 공개 전에 문장과 분류를 확인하세요.";
+  return { title: guessTitle(fullText), edition: guessEdition(fullText, file.name), monthLabel: guessMonthLabel(fullText), summary: makeSummary(fullText), sections: classifySections(fullText, pageTexts), events: extractEvents(fullText), pages, sourceFileName: file.name, extractionNote };
 }
 
 async function renderCompressedPage(page, pageNumber) {
@@ -609,7 +689,17 @@ async function renderCompressedPage(page, pageNumber) {
   canvas.height = Math.floor(viewport.height);
   await page.render({ canvasContext: context, viewport }).promise;
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.72));
-  return { number: pageNumber, url: URL.createObjectURL(blob), blob, width: canvas.width, height: canvas.height };
+  const url = await blobToDataUrl(blob);
+  return { number: pageNumber, url, blob, size: blob?.size || 0, width: canvas.width, height: canvas.height };
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
 function validatePasscodePair(passcode, confirmPasscode) {
