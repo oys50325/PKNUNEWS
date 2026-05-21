@@ -48,6 +48,15 @@ const SECTION_DEFS = [
   { key: "info", label: "알기 쉬운 사회복지 정보통", icon: Info, hints: ["사회복지 정보통", "알기 쉬운", "정책", "제도", "복지정보", "사회복지"] },
 ];
 
+const SECTION_HEADING_ALIASES = {
+  major: ["전공소식", "전공 소식", "학부 소식"],
+  faculty: ["교수동정", "교수 동정", "교수님 소식"],
+  graduate: ["대학원 소식", "대학원소식", "일반대학원", "글로벌정책대학원"],
+  calendar: ["월별 전공 일정", "월별전공일정", "전공 일정", "일정"],
+  interview: ["복 들어오는 인터뷰", "복들어오는인터뷰", "인터뷰"],
+  info: ["알기 쉬운 사회복지 정보통", "알기쉬운사회복지정보통", "사회복지 정보통", "정보통"],
+};
+
 const SAMPLE_EVENTS = [
   { date: "6.03", title: "전공 뉴스레터 원고 마감" },
   { date: "6.12", title: "복 들어오는 인터뷰 촬영" },
@@ -682,13 +691,13 @@ async function extractNewsletter(file, updateStatus) {
 }
 
 async function renderCompressedPage(page, pageNumber) {
-  const viewport = page.getViewport({ scale: 1.15 });
+  const viewport = page.getViewport({ scale: 1.55 });
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { alpha: false });
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
   await page.render({ canvasContext: context, viewport }).promise;
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.72));
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
   const url = await blobToDataUrl(blob);
   return { number: pageNumber, url, blob, size: blob?.size || 0, width: canvas.width, height: canvas.height };
 }
@@ -760,11 +769,16 @@ function makeSummary(text) {
 
 function classifySections(text, pageTexts = []) {
   const sections = Object.fromEntries(SECTION_DEFS.map((section) => [section.key, []]));
+  const headingSections = classifyByHeadings(text);
+  Object.entries(headingSections).forEach(([key, items]) => {
+    sections[key] = items;
+  });
+
   const units = splitIntoReadableUnits(text);
   const used = new Set();
   units.forEach((unit, index) => {
     const key = bestSectionForText(unit);
-    if (!key || key === "calendar" || sections[key].length >= 6) return;
+    if (!key || key === "calendar" || sections[key].length >= 6 || sectionAlreadyIncludes(sections[key], unit)) return;
     sections[key].push(unit);
     used.add(index);
   });
@@ -779,9 +793,53 @@ function classifySections(text, pageTexts = []) {
   });
   unassigned.forEach((unit, index) => {
     const key = fillKeys[index % fillKeys.length];
-    if (sections[key].length < 6) sections[key].push(unit);
+    if (sections[key].length < 6 && !sectionAlreadyIncludes(sections[key], unit)) sections[key].push(unit);
   });
   return sections;
+}
+
+function classifyByHeadings(text) {
+  const sections = {};
+  const markers = findSectionMarkers(text);
+  markers.forEach((marker, index) => {
+    if (marker.key === "calendar") return;
+    const nextMarker = markers.slice(index + 1).find((item) => item.index > marker.index);
+    const block = text.slice(marker.end, nextMarker?.index || text.length);
+    const items = splitIntoReadableUnits(block).filter((item) => !looksLikeSectionHeading(item));
+    if (items.length > 0) sections[marker.key] = items.slice(0, 6);
+  });
+  return sections;
+}
+
+function findSectionMarkers(text) {
+  const markers = [];
+  Object.entries(SECTION_HEADING_ALIASES).forEach(([key, aliases]) => {
+    aliases.forEach((alias) => {
+      let fromIndex = 0;
+      while (fromIndex < text.length) {
+        const index = text.indexOf(alias, fromIndex);
+        if (index < 0) break;
+        markers.push({ key, index, end: index + alias.length, alias });
+        fromIndex = index + alias.length;
+      }
+    });
+  });
+  return markers
+    .sort((a, b) => a.index - b.index || b.alias.length - a.alias.length)
+    .filter((marker, index, all) => index === 0 || Math.abs(marker.index - all[index - 1].index) > 3);
+}
+
+function looksLikeSectionHeading(text) {
+  const compact = text.replace(/\s+/g, "");
+  return Object.values(SECTION_HEADING_ALIASES).flat().some((alias) => compact === alias.replace(/\s+/g, ""));
+}
+
+function sectionAlreadyIncludes(items, unit) {
+  const compactUnit = unit.replace(/\s+/g, "");
+  return items.some((item) => {
+    const compactItem = item.replace(/\s+/g, "");
+    return compactItem.includes(compactUnit.slice(0, 30)) || compactUnit.includes(compactItem.slice(0, 30));
+  });
 }
 
 function bestSectionForText(text) {
