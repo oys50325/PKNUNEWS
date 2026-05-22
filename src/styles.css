@@ -683,6 +683,12 @@ textarea:focus {
 .issue-edit-button {
   margin: 0 10px 10px;
   justify-self: start;
+  min-height: 42px;
+  padding: 10px 14px;
+  color: #fff;
+  background: var(--rose);
+  font-size: 14px;
+  box-shadow: 0 8px 18px rgba(223, 70, 97, 0.24);
 }
 
 .icon-danger {
