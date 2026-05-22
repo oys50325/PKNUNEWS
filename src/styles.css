@@ -331,7 +331,27 @@ p {
   gap: 8px;
 }
 
-input {
+.publish-meta {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fbfdff;
+}
+
+.publish-meta label {
+  display: grid;
+  gap: 7px;
+}
+
+.publish-meta span {
+  color: var(--navy);
+  font-weight: 950;
+}
+
+input,
+textarea {
   width: 100%;
   min-height: 46px;
   border: 1px solid var(--line);
@@ -339,10 +359,18 @@ input {
   padding: 10px 12px;
   color: var(--ink);
   background: #fff;
+  font: inherit;
   outline: none;
 }
 
-input:focus {
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+input:focus,
+textarea:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 4px rgba(57, 169, 214, 0.16);
 }
@@ -573,6 +601,22 @@ input:focus {
 .issue-card span,
 .empty {
   color: var(--muted);
+}
+
+.issue-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.issue-keywords em {
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--navy);
+  background: #eef6fb;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .icon-danger {
@@ -891,6 +935,13 @@ select:focus {
 
 .auth-form.compact p {
   margin-bottom: 0;
+}
+
+.auth-warning {
+  border-left: 4px solid var(--rose);
+  padding-left: 10px;
+  color: var(--navy) !important;
+  font-weight: 900;
 }
 
 .studio-section {

@@ -23,7 +23,7 @@ import {
 import { listIssues, listUsers, publishIssue, realtimeDatabaseReady, removeIssue, saveUsers } from "./firebase.js";
 
 const ADMIN_ACCOUNT = {
-  name: "PKNUNEWS",
+  name: "PS1",
   passcode: "50321004",
   role: "admin",
   studentYear: "주 제작자",
@@ -78,7 +78,7 @@ export default function App() {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return issues;
     return issues.filter((issue) =>
-      [issue.title, issue.edition, issue.monthLabel, issue.summary].some((value) =>
+      [issue.title, issue.edition, issue.monthLabel, issue.summary, ...(issue.keywords || [])].some((value) =>
         String(value || "").toLowerCase().includes(keyword),
       ),
     );
@@ -90,6 +90,7 @@ export default function App() {
   function openAuth(mode) {
     setAuthMode(mode);
     setAuthMessage("");
+    scrollToTop();
   }
 
   function togglePassword(key) {
@@ -154,6 +155,12 @@ export default function App() {
     if (!canApproveUsers) return;
     setUsers((current) => current.map((user) => (user.id === userId ? { ...user, approved: true, approvedAt: new Date().toISOString() } : user)));
     setStatus("제작자를 승인했습니다.");
+  }
+
+  function cancelPendingUser(userId) {
+    if (!canApproveUsers) return;
+    setUsers((current) => current.filter((user) => user.id !== userId));
+    setStatus("제작자 신청을 취소하고 삭제했습니다.");
   }
 
   function expelUser(userId) {
@@ -272,6 +279,19 @@ export default function App() {
     }
   }
 
+  function updateExtractedTitle(value) {
+    setExtracted((current) => (current ? { ...current, title: value } : current));
+  }
+
+  function updateExtractedKeywords(value) {
+    const keywords = value
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 10);
+    setExtracted((current) => (current ? { ...current, keywords } : current));
+  }
+
   async function handleRemove(issue) {
     if (!isAdmin) return;
     setIsBusy(true);
@@ -298,9 +318,9 @@ export default function App() {
           </span>
         </a>
         <nav>
-          <a href="#newsletter">뉴스레터</a>
-          <a href="#archive">지난 뉴스레터 보기</a>
-          {canUseStudio && <a href="#studio">제작실</a>}
+          <button className="nav-button" type="button" onClick={() => scrollToElement("newsletter")}>뉴스레터</button>
+          <button className="nav-button" type="button" onClick={() => scrollToElement("archive")}>지난 뉴스레터 보기</button>
+          {canUseStudio && <button className="nav-button" type="button" onClick={() => scrollToElement("studio")}>제작실</button>}
           {session ? (
             <button className="nav-button" type="button" onClick={handleLogout}><LogOut size={16} />로그아웃</button>
           ) : (
@@ -345,7 +365,12 @@ export default function App() {
           {filteredIssues.length === 0 && <p className="empty">아직 기록된 뉴스레터가 없습니다. 제작자가 PDF를 게재하면 이곳에 쌓입니다.</p>}
           {filteredIssues.map((issue) => (
             <article key={issue.id} className="issue-card">
-              <button type="button" onClick={() => setActiveIssue(issue)}><BookOpenText size={24} /><strong>{issue.title}</strong><span>{issue.edition} · {issue.monthLabel}</span></button>
+              <button type="button" onClick={() => { setActiveIssue(issue); scrollToElement("newsletter"); }}>
+                <BookOpenText size={24} />
+                <strong>{issue.title}</strong>
+                <span>{issue.edition} · {issue.monthLabel}</span>
+                {Boolean(issue.keywords?.length) && <IssueKeywords keywords={issue.keywords} />}
+              </button>
               {isAdmin && <button className="icon-danger" type="button" onClick={() => handleRemove(issue)} aria-label={`${issue.title} 삭제`}><Trash2 size={18} /></button>}
             </article>
           ))}
@@ -383,10 +408,22 @@ export default function App() {
                 <input type="file" accept="application/pdf" disabled={isBusy} onChange={(event) => handleFile(event.target.files?.[0])} />
               </label>
               {extracted && (
-                <div className="approval-row">
-                  <button className="primary" type="button" disabled={isBusy} onClick={handlePublish}><CheckCircle2 size={18} />최종 승인 및 공개 게재</button>
-                  <button className="ghost" type="button" disabled={isBusy} onClick={() => setExtracted(null)}><Trash2 size={18} />미리보기 삭제</button>
-                </div>
+                <>
+                  <div className="publish-meta">
+                    <label>
+                      <span>뉴스레터 제목</span>
+                      <input value={extracted.title} onChange={(event) => updateExtractedTitle(event.target.value)} placeholder="뉴스레터 제목" />
+                    </label>
+                    <label>
+                      <span>주요이슈 핵심어 최대 10개</span>
+                      <textarea value={(extracted.keywords || []).join(", ")} onChange={(event) => updateExtractedKeywords(event.target.value)} placeholder="예: 장학, 비교과, 교수동정, 대학원" />
+                    </label>
+                  </div>
+                  <div className="approval-row">
+                    <button className="primary" type="button" disabled={isBusy} onClick={handlePublish}><CheckCircle2 size={18} />최종 승인 및 공개 게재</button>
+                    <button className="ghost" type="button" disabled={isBusy} onClick={() => setExtracted(null)}><Trash2 size={18} />미리보기 삭제</button>
+                  </div>
+                </>
               )}
             </div>
             <AccountPanel
@@ -404,6 +441,7 @@ export default function App() {
               togglePassword={togglePassword}
               onChangePasscode={handleChangePasscode}
               onApproveUser={approveUser}
+              onCancelPendingUser={cancelPendingUser}
               onExpelUser={expelUser}
               onSetSubadmin={setSubadmin}
               onClearRequest={clearPasswordRequest}
@@ -437,6 +475,7 @@ function CompactAuthPanel(props) {
         <form className="auth-form compact" onSubmit={onSignup}>
           <span className="eyebrow"><UserPlus size={16} /> 제작자 신규가입</span>
           <p>{PASSCODE_NOTICE} 신청 후 주 제작자 또는 부 제작자 승인이 필요합니다.</p>
+          <p className="auth-warning">제작자(교수, 조교 등)가 아니면 가입을 신청하지 말아 주십시오.</p>
           <input value={signupForm.name} onChange={(event) => setSignupForm({ ...signupForm, name: event.target.value })} placeholder="이름" />
           <select value={signupForm.studentYear} onChange={(event) => setSignupForm({ ...signupForm, studentYear: event.target.value })}>{STUDENT_YEARS.map((year) => <option key={year} value={year}>{year}학번</option>)}</select>
           <PasswordField value={signupForm.passcode} onChange={(value) => setSignupForm({ ...signupForm, passcode: value })} visible={visiblePasswords.signup} onToggle={() => togglePassword("signup")} placeholder="숫자 8자리 비밀번호" />
@@ -458,7 +497,7 @@ function CompactAuthPanel(props) {
 }
 
 function AccountPanel(props) {
-  const { session, isAdmin, canApproveUsers, users, pendingUsers, approvedUsers, passwordRequests, subadminCount, changeForm, setChangeForm, visiblePasswords, togglePassword, onChangePasscode, onApproveUser, onExpelUser, onSetSubadmin, onClearRequest, realtimeDatabaseReady } = props;
+  const { session, isAdmin, canApproveUsers, users, pendingUsers, approvedUsers, passwordRequests, subadminCount, changeForm, setChangeForm, visiblePasswords, togglePassword, onChangePasscode, onApproveUser, onCancelPendingUser, onExpelUser, onSetSubadmin, onClearRequest, realtimeDatabaseReady } = props;
   return (
     <aside id="account" className="login-box account-panel">
       <span className="eyebrow"><UserRound size={16} /> 제작자 계정</span>
@@ -480,7 +519,13 @@ function AccountPanel(props) {
           <strong>제작자 승인 대기</strong>
           <p>주 제작자와 부 제작자만 공동제작자를 승인할 수 있습니다.</p>
           {pendingUsers.length === 0 && <span className="muted">승인 대기자가 없습니다.</span>}
-          {pendingUsers.map((user) => <div className="request-item" key={user.id}><span>{user.name} · {user.studentYear}학번</span><button type="button" onClick={() => onApproveUser(user.id)}><UserCheck size={16} /> 승인</button></div>)}
+          {pendingUsers.map((user) => (
+            <div className="request-item" key={user.id}>
+              <span>{user.name} · {user.studentYear}학번</span>
+              <button type="button" onClick={() => onApproveUser(user.id)}><UserCheck size={16} /> 승인</button>
+              <button type="button" className="danger-inline" onClick={() => onCancelPendingUser(user.id)}>신청 취소</button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -510,6 +555,10 @@ function AccountPanel(props) {
       )}
     </aside>
   );
+}
+
+function IssueKeywords({ keywords = [] }) {
+  return <div className="issue-keywords">{keywords.slice(0, 10).map((keyword) => <em key={keyword}>{keyword}</em>)}</div>;
 }
 
 function PasswordField({ value, onChange, visible, onToggle, placeholder }) {
@@ -563,7 +612,7 @@ async function extractNewsletter(file, updateStatus) {
     const page = await pdf.getPage(pageNumber);
     pages.push(await renderCompressedPage(page, pageNumber));
   }
-  return { title: "PS1 NEWS LETTER", edition: guessEdition(file.name), monthLabel: guessMonthLabel(), summary: "", sections: {}, events: [], pages, sourceFileName: file.name, pageCount: pdf.numPages };
+  return { title: "PS1 NEWS LETTER", edition: guessEdition(file.name), monthLabel: guessMonthLabel(), summary: "", sections: {}, events: [], keywords: [], pages, sourceFileName: file.name, pageCount: pdf.numPages };
 }
 
 async function renderCompressedPage(page, pageNumber) {
@@ -611,10 +660,23 @@ function readUsers() {
 
 function readSession() {
   try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (saved?.role === "admin" && saved.name === "PKNUNEWS") return { ...saved, name: ADMIN_ACCOUNT.name };
+    return saved;
   } catch {
     return null;
   }
+}
+
+function scrollToTop() {
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+}
+
+function scrollToElement(id) {
+  window.requestAnimationFrame(() => {
+    const target = document.getElementById(id);
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function roleLabel(role) {
@@ -642,6 +704,7 @@ function createWelcomeIssue() {
     summary: "",
     sections: {},
     events: [],
+    keywords: [],
     pages: [],
     pageCount: 0,
   };

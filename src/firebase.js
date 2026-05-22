@@ -98,6 +98,7 @@ export async function publishIssue(issue) {
     summary: issue.summary,
     sections: issue.sections,
     events: issue.events,
+    keywords: issue.keywords || [],
     pageCount: issue.pages.length,
     createdAt: firestoreApi.serverTimestamp(),
     publishedAt: firestoreApi.serverTimestamp(),
@@ -235,6 +236,7 @@ function serializeIssue(issue, id) {
     summary: issue.summary,
     sections: issue.sections,
     events: issue.events,
+    keywords: issue.keywords || [],
     sourceFileName: issue.sourceFileName,
     pageCount: issue.pageCount || issue.pages?.length || 0,
     pages: (issue.pages || []).map((page, index) => ({
