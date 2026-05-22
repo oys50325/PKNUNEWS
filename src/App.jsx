@@ -20,7 +20,7 @@ import {
   UserPlus,
   UserRound,
 } from "lucide-react";
-import { listIssues, listUsers, publishIssue, realtimeDatabaseReady, removeIssue, saveUsers } from "./firebase.js";
+import { listIssues, listUsers, publishIssue, realtimeDatabaseReady, removeIssue, saveUsers, updateIssueMeta } from "./firebase.js";
 
 const ADMIN_ACCOUNT = {
   name: "PS1",
@@ -55,6 +55,8 @@ export default function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [isDraggingPdf, setIsDraggingPdf] = useState(false);
   const [query, setQuery] = useState("");
+  const [editingIssueId, setEditingIssueId] = useState(null);
+  const [editIssueForm, setEditIssueForm] = useState({ title: "", keywords: Array(10).fill("") });
 
   const isAdmin = session?.role === "admin";
   const canApproveUsers = session?.role === "admin" || session?.role === "subadmin";
@@ -268,7 +270,7 @@ export default function App() {
     setIsBusy(true);
     setStatus("게재 중입니다. 원본 PDF는 저장하지 않고 압축된 전시 이미지와 요약 데이터만 보관합니다.");
     try {
-      await publishIssue(extracted);
+      await publishIssue({ ...extracted, title: extracted.title.trim() || "PS1 NEWS LETTER", keywords: cleanKeywords(extracted.keywords) });
       setExtracted(null);
       await refreshIssues();
       setStatus("게재가 완료되었습니다. 공개 뉴스레터 화면에 반영됩니다.");
@@ -283,13 +285,48 @@ export default function App() {
     setExtracted((current) => (current ? { ...current, title: value } : current));
   }
 
-  function updateExtractedKeywords(value) {
-    const keywords = value
-      .split(/[,\n]/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, 10);
-    setExtracted((current) => (current ? { ...current, keywords } : current));
+  function updateExtractedKeyword(index, value) {
+    setExtracted((current) => {
+      if (!current) return current;
+      const keywords = normalizeKeywordInputs(current.keywords);
+      keywords[index] = value.slice(0, 30);
+      return { ...current, keywords: normalizeKeywordInputs(keywords) };
+    });
+  }
+
+  function startEditIssue(issue) {
+    setEditingIssueId(issue.id);
+    setEditIssueForm({ title: issue.title || "", keywords: normalizeKeywordInputs(issue.keywords) });
+  }
+
+  function cancelEditIssue() {
+    setEditingIssueId(null);
+    setEditIssueForm({ title: "", keywords: Array(10).fill("") });
+  }
+
+  function updateEditKeyword(index, value) {
+    setEditIssueForm((current) => {
+      const keywords = normalizeKeywordInputs(current.keywords);
+      keywords[index] = value.slice(0, 30);
+      return { ...current, keywords };
+    });
+  }
+
+  async function handleUpdateIssueMeta(issue) {
+    if (!canUseStudio) return;
+    setIsBusy(true);
+    try {
+      const keywords = cleanKeywords(editIssueForm.keywords);
+      await updateIssueMeta(issue.id, { title: editIssueForm.title.trim() || issue.title, keywords });
+      await refreshIssues();
+      setActiveIssue((current) => (current?.id === issue.id ? { ...current, title: editIssueForm.title.trim() || issue.title, keywords } : current));
+      cancelEditIssue();
+      setStatus("뉴스레터 제목과 핵심어를 수정했습니다.");
+    } catch (error) {
+      setStatus(`수정 실패: ${error.message}`);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function handleRemove(issue) {
@@ -371,6 +408,20 @@ export default function App() {
                 <span>{issue.edition} · {issue.monthLabel}</span>
                 {Boolean(issue.keywords?.length) && <IssueKeywords keywords={issue.keywords} />}
               </button>
+              {canUseStudio && (
+                editingIssueId === issue.id ? (
+                  <div className="issue-edit">
+                    <input value={editIssueForm.title} onChange={(event) => setEditIssueForm({ ...editIssueForm, title: event.target.value })} placeholder="뉴스레터 제목" />
+                    <KeywordInputs keywords={editIssueForm.keywords} onChange={updateEditKeyword} compact />
+                    <div className="issue-edit-actions">
+                      <button type="button" onClick={() => handleUpdateIssueMeta(issue)} disabled={isBusy}>저장</button>
+                      <button type="button" onClick={cancelEditIssue} disabled={isBusy}>취소</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="issue-edit-button" type="button" onClick={() => startEditIssue(issue)}>제목/핵심어 수정</button>
+                )
+              )}
               {isAdmin && <button className="icon-danger" type="button" onClick={() => handleRemove(issue)} aria-label={`${issue.title} 삭제`}><Trash2 size={18} /></button>}
             </article>
           ))}
@@ -416,7 +467,7 @@ export default function App() {
                     </label>
                     <label>
                       <span>주요이슈 핵심어 최대 10개</span>
-                      <textarea value={(extracted.keywords || []).join(", ")} onChange={(event) => updateExtractedKeywords(event.target.value)} placeholder="예: 장학, 비교과, 교수동정, 대학원" />
+                      <KeywordInputs keywords={normalizeKeywordInputs(extracted.keywords)} onChange={updateExtractedKeyword} />
                     </label>
                   </div>
                   <div className="approval-row">
@@ -561,6 +612,25 @@ function IssueKeywords({ keywords = [] }) {
   return <div className="issue-keywords">{keywords.slice(0, 10).map((keyword) => <em key={keyword}>{keyword}</em>)}</div>;
 }
 
+function KeywordInputs({ keywords = [], onChange, compact = false }) {
+  const values = normalizeKeywordInputs(keywords);
+  return (
+    <div className={compact ? "keyword-inputs compact" : "keyword-inputs"}>
+      {values.map((keyword, index) => (
+        <label key={index}>
+          <span>{index + 1}</span>
+          <input
+            value={keyword}
+            maxLength={30}
+            onChange={(event) => onChange(index, event.target.value)}
+            placeholder="핵심어"
+          />
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function PasswordField({ value, onChange, visible, onToggle, placeholder }) {
   return (
     <label className="password-field">
@@ -666,6 +736,14 @@ function readSession() {
   } catch {
     return null;
   }
+}
+
+function normalizeKeywordInputs(keywords = []) {
+  return [...keywords, ...Array(10).fill("")].slice(0, 10).map((keyword) => String(keyword || "").slice(0, 30));
+}
+
+function cleanKeywords(keywords = []) {
+  return Array.from(new Set(normalizeKeywordInputs(keywords).map((keyword) => keyword.trim()).filter(Boolean))).slice(0, 10);
 }
 
 function scrollToTop() {

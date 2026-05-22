@@ -350,6 +350,38 @@ p {
   font-weight: 950;
 }
 
+.keyword-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.keyword-inputs.compact {
+  grid-template-columns: 1fr;
+}
+
+.keyword-inputs label {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.keyword-inputs label span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--navy);
+  font-size: 12px;
+}
+
+.keyword-inputs input {
+  min-height: 38px;
+}
+
 input,
 textarea {
   width: 100%;
@@ -617,6 +649,40 @@ textarea:focus {
   font-size: 12px;
   font-style: normal;
   font-weight: 900;
+}
+
+.issue-edit {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+  background: #fbfdff;
+}
+
+.issue-edit input {
+  min-height: 38px;
+}
+
+.issue-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.issue-edit-actions button,
+.issue-edit-button {
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--navy);
+  background: #eef6fb;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.issue-edit-button {
+  margin: 0 10px 10px;
+  justify-self: start;
 }
 
 .icon-danger {

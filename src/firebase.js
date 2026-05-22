@@ -98,7 +98,7 @@ export async function publishIssue(issue) {
     summary: issue.summary,
     sections: issue.sections,
     events: issue.events,
-    keywords: issue.keywords || [],
+    keywords: normalizeKeywords(issue.keywords),
     pageCount: issue.pages.length,
     createdAt: firestoreApi.serverTimestamp(),
     publishedAt: firestoreApi.serverTimestamp(),
@@ -131,6 +131,28 @@ export async function publishIssue(issue) {
   });
 
   return { id: issueRef.id, ...issue, pages };
+}
+
+export async function updateIssueMeta(issueId, meta) {
+  const payload = stripUndefined({
+    title: meta.title,
+    keywords: normalizeKeywords(meta.keywords),
+    updatedAt: new Date().toISOString(),
+  });
+
+  if (realtimeDatabaseReady) {
+    await patchRealtime(`newsletters/${issueId}`, payload);
+    return;
+  }
+
+  if (!firebaseReady) {
+    const next = readLocalIssues().map((issue) => (issue.id === issueId ? { ...issue, ...payload } : issue));
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
+    return;
+  }
+
+  const { db, firestoreApi } = await getServices();
+  await firestoreApi.updateDoc(firestoreApi.doc(db, "newsletters", issueId), payload);
 }
 
 export async function removeIssue(issue) {
@@ -236,7 +258,7 @@ function serializeIssue(issue, id) {
     summary: issue.summary,
     sections: issue.sections,
     events: issue.events,
-    keywords: issue.keywords || [],
+    keywords: normalizeKeywords(issue.keywords),
     sourceFileName: issue.sourceFileName,
     pageCount: issue.pageCount || issue.pages?.length || 0,
     pages: (issue.pages || []).map((page, index) => ({
@@ -285,10 +307,24 @@ async function writeRealtime(path, value) {
   return response.json();
 }
 
+async function patchRealtime(path, value) {
+  const response = await fetch(`${realtimeDatabaseURL}/${path}.json`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  });
+  if (!response.ok) throw new Error(`Realtime Database update failed: ${response.status}`);
+  return response.json();
+}
+
 function normalizeDatabaseURL(url) {
   return String(url || "").replace(/\/+$/, "");
 }
 
 function stripUndefined(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeKeywords(keywords = []) {
+  return Array.from(new Set(keywords.map((item) => String(item || "").trim().slice(0, 30)).filter(Boolean))).slice(0, 10);
 }
