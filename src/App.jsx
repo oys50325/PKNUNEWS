@@ -270,7 +270,9 @@ export default function App() {
     setIsBusy(true);
     setStatus("게재 중입니다. 원본 PDF는 저장하지 않고 압축된 전시 이미지와 요약 데이터만 보관합니다.");
     try {
-      await publishIssue({ ...extracted, title: extracted.title.trim() || "PS1 NEWS LETTER", keywords: cleanKeywords(extracted.keywords) });
+      const keywords = cleanKeywords(extracted.keywords);
+      const keywordTargets = buildKeywordTargets(extracted.pages, keywords);
+      await publishIssue({ ...extracted, title: extracted.title.trim() || "PS1 NEWS LETTER", keywords, keywordTargets });
       setExtracted(null);
       await refreshIssues();
       setStatus("게재가 완료되었습니다. 공개 뉴스레터 화면에 반영됩니다.");
@@ -317,15 +319,29 @@ export default function App() {
     setIsBusy(true);
     try {
       const keywords = cleanKeywords(editIssueForm.keywords);
-      await updateIssueMeta(issue.id, { title: editIssueForm.title.trim() || issue.title, keywords });
+      setStatus("핵심어가 있는 PDF 페이지를 찾는 중입니다. 기존 뉴스레터는 OCR 시간이 조금 걸릴 수 있습니다.");
+      const pages = await ensurePageOcr(issue.pages || [], (message) => setStatus(message));
+      const keywordTargets = buildKeywordTargets(pages, keywords);
+      await updateIssueMeta(issue.id, { title: editIssueForm.title.trim() || issue.title, keywords, keywordTargets });
       await refreshIssues();
-      setActiveIssue((current) => (current?.id === issue.id ? { ...current, title: editIssueForm.title.trim() || issue.title, keywords } : current));
+      setActiveIssue((current) => (current?.id === issue.id ? { ...current, title: editIssueForm.title.trim() || issue.title, keywords, keywordTargets } : current));
       cancelEditIssue();
       setStatus("뉴스레터 제목과 핵심어를 수정했습니다.");
     } catch (error) {
       setStatus(`수정 실패: ${error.message}`);
     } finally {
       setIsBusy(false);
+    }
+  }
+
+  function handleKeywordJump(issue, keyword) {
+    const targetPage = issue.keywordTargets?.[keyword] || issue.keywordTargets?.[normalizeForSearch(keyword)];
+    setActiveIssue(issue);
+    if (targetPage) {
+      window.setTimeout(() => scrollToPdfPage(targetPage), 140);
+    } else {
+      window.setTimeout(() => scrollToElement("newsletter"), 140);
+      setStatus(`'${keyword}' 핵심어의 페이지 위치가 아직 없습니다. 제목/핵심어 수정을 저장하면 OCR로 위치를 찾습니다.`);
     }
   }
 
@@ -406,8 +422,8 @@ export default function App() {
                 <BookOpenText size={24} />
                 <strong>{issue.title}</strong>
                 <span>{issue.edition} · {issue.monthLabel}</span>
-                {Boolean(issue.keywords?.length) && <IssueKeywords keywords={issue.keywords} />}
               </button>
+              {Boolean(issue.keywords?.length) && <IssueKeywords keywords={issue.keywords} onKeywordClick={(keyword) => handleKeywordJump(issue, keyword)} />}
               {canUseStudio && (
                 editingIssueId === issue.id ? (
                   <div className="issue-edit">
@@ -608,8 +624,16 @@ function AccountPanel(props) {
   );
 }
 
-function IssueKeywords({ keywords = [] }) {
-  return <div className="issue-keywords">{keywords.slice(0, 10).map((keyword) => <em key={keyword}>{keyword}</em>)}</div>;
+function IssueKeywords({ keywords = [], onKeywordClick }) {
+  return (
+    <div className="issue-keywords">
+      {keywords.slice(0, 10).map((keyword) => (
+        <button key={keyword} type="button" onClick={(event) => { event.stopPropagation(); onKeywordClick?.(keyword); }}>
+          {keyword}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function KeywordInputs({ keywords = [], onChange, compact = false }) {
@@ -648,7 +672,7 @@ function NewsletterView({ issue }) {
       <div className="pdf-scroll">
         {issue.pages?.length ? (
           issue.pages.map((page) => (
-            <button className="pdf-page" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
+            <button id={`pdf-page-${page.number}`} className="pdf-page" type="button" key={page.number} onClick={() => setZoomedPage(page)}>
               <img
                 src={page.url}
                 alt={`${issue.title} ${page.number}쪽`}
@@ -682,7 +706,8 @@ async function extractNewsletter(file, updateStatus) {
     const page = await pdf.getPage(pageNumber);
     pages.push(await renderCompressedPage(page, pageNumber));
   }
-  return { title: "PS1 NEWS LETTER", edition: guessEdition(file.name), monthLabel: guessMonthLabel(), summary: "", sections: {}, events: [], keywords: [], pages, sourceFileName: file.name, pageCount: pdf.numPages };
+  const ocrPages = await ensurePageOcr(pages, updateStatus);
+  return { title: "PS1 NEWS LETTER", edition: guessEdition(file.name), monthLabel: guessMonthLabel(), summary: "", sections: {}, events: [], keywords: [], keywordTargets: {}, pages: ocrPages, sourceFileName: file.name, pageCount: pdf.numPages };
 }
 
 async function renderCompressedPage(page, pageNumber) {
@@ -712,6 +737,46 @@ function blobToDataUrl(blob) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
+}
+
+async function ensurePageOcr(pages = [], updateStatus = () => {}) {
+  if (pages.every((page) => page.ocrText)) return pages;
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker(["kor", "eng"], 1, {
+    logger: (message) => {
+      if (message.status === "recognizing text") {
+        updateStatus(`OCR로 핵심어 위치를 찾는 중입니다. ${Math.round((message.progress || 0) * 100)}%`);
+      }
+    },
+  });
+  try {
+    const next = [];
+    for (let index = 0; index < pages.length; index += 1) {
+      const page = pages[index];
+      if (page.ocrText) {
+        next.push(page);
+        continue;
+      }
+      updateStatus(`${pages.length}쪽 중 ${index + 1}쪽에서 핵심어 위치를 찾는 중입니다.`);
+      const result = await worker.recognize(page.url);
+      next.push({ ...page, ocrText: result.data?.text || "" });
+    }
+    return next;
+  } finally {
+    await worker.terminate();
+  }
+}
+
+function buildKeywordTargets(pages = [], keywords = []) {
+  return cleanKeywords(keywords).reduce((targets, keyword) => {
+    const normalizedKeyword = normalizeForSearch(keyword);
+    const found = pages.find((page) => normalizeForSearch(page.ocrText || "").includes(normalizedKeyword));
+    if (found?.number) {
+      targets[keyword] = found.number;
+      targets[normalizedKeyword] = found.number;
+    }
+    return targets;
+  }, {});
 }
 
 function validatePasscodePair(passcode, confirmPasscode) {
@@ -746,6 +811,10 @@ function cleanKeywords(keywords = []) {
   return Array.from(new Set(normalizeKeywordInputs(keywords).map((keyword) => keyword.trim()).filter(Boolean))).slice(0, 10);
 }
 
+function normalizeForSearch(value = "") {
+  return String(value).replace(/\s+/g, "").toLowerCase();
+}
+
 function scrollToTop() {
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
@@ -753,6 +822,13 @@ function scrollToTop() {
 function scrollToElement(id) {
   window.requestAnimationFrame(() => {
     const target = document.getElementById(id);
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function scrollToPdfPage(pageNumber) {
+  window.requestAnimationFrame(() => {
+    const target = document.getElementById(`pdf-page-${pageNumber}`);
     if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }

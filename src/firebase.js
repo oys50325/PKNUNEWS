@@ -99,6 +99,7 @@ export async function publishIssue(issue) {
     sections: issue.sections,
     events: issue.events,
     keywords: normalizeKeywords(issue.keywords),
+    keywordTargets: issue.keywordTargets || {},
     pageCount: issue.pages.length,
     createdAt: firestoreApi.serverTimestamp(),
     publishedAt: firestoreApi.serverTimestamp(),
@@ -121,6 +122,7 @@ export async function publishIssue(issue) {
       width: page.width,
       height: page.height,
       size: page.blob.size,
+      ocrText: page.ocrText || "",
     });
   }
 
@@ -137,6 +139,7 @@ export async function updateIssueMeta(issueId, meta) {
   const payload = stripUndefined({
     title: meta.title,
     keywords: normalizeKeywords(meta.keywords),
+    keywordTargets: meta.keywordTargets || {},
     updatedAt: new Date().toISOString(),
   });
 
@@ -259,6 +262,7 @@ function serializeIssue(issue, id) {
     sections: issue.sections,
     events: issue.events,
     keywords: normalizeKeywords(issue.keywords),
+    keywordTargets: issue.keywordTargets || {},
     sourceFileName: issue.sourceFileName,
     pageCount: issue.pageCount || issue.pages?.length || 0,
     pages: (issue.pages || []).map((page, index) => ({
@@ -267,6 +271,7 @@ function serializeIssue(issue, id) {
       width: page.width,
       height: page.height,
       size: page.size || page.blob?.size || 0,
+      ocrText: page.ocrText || "",
     })),
     storageMode: "compressed-inline-page-images",
     publishedAt: new Date().toISOString(),

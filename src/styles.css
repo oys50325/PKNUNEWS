@@ -639,16 +639,20 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  padding: 0 10px 10px;
 }
 
-.issue-keywords em {
+.issue-keywords button {
   border-radius: 999px;
   padding: 4px 8px;
   color: var(--navy);
   background: #eef6fb;
   font-size: 12px;
-  font-style: normal;
   font-weight: 900;
+}
+
+.issue-keywords button:hover {
+  background: #dceef8;
 }
 
 .issue-edit {
