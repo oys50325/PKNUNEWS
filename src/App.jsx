@@ -400,8 +400,8 @@ export default function App() {
             <button className="nav-button" type="button" onClick={handleLogout}><LogOut size={16} />로그아웃</button>
           ) : (
             <>
-              <button className="nav-button compact-auth" type="button" onClick={() => openAuth("login")}>로그인</button>
-              <button className="nav-button compact-auth" type="button" onClick={() => openAuth("signup")}>신규가입</button>
+              <button className="nav-button compact-auth" type="button" onClick={() => openAuth("login")}>제작자 로그인</button>
+              <button className="nav-button compact-auth" type="button" onClick={() => openAuth("signup")}>제작자 신규가입</button>
             </>
           )}
         </nav>
@@ -548,13 +548,14 @@ function CompactAuthPanel(props) {
   return (
     <section className="compact-auth-panel">
       <div className="auth-tabs">
-        <button className={authMode === "login" ? "active" : ""} type="button" onClick={() => setAuthMode("login")}><LogIn size={16} />로그인</button>
-        <button className={authMode === "signup" ? "active" : ""} type="button" onClick={() => setAuthMode("signup")}><UserPlus size={16} />신규가입</button>
-        <button className={authMode === "forgot" ? "active" : ""} type="button" onClick={() => setAuthMode("forgot")}><KeyRound size={16} />비밀번호 찾기</button>
+        <button className={authMode === "login" ? "active" : ""} type="button" onClick={() => setAuthMode("login")}><LogIn size={16} />제작자 로그인</button>
+        <button className={authMode === "signup" ? "active" : ""} type="button" onClick={() => setAuthMode("signup")}><UserPlus size={16} />제작자 신규가입</button>
+        <button className={authMode === "forgot" ? "active" : ""} type="button" onClick={() => setAuthMode("forgot")}><KeyRound size={16} />제작자 비밀번호 찾기</button>
         <button type="button" onClick={close}>닫기</button>
       </div>
       {authMode === "login" && (
         <form className="auth-form compact" onSubmit={onLogin}>
+          <span className="eyebrow"><LogIn size={16} /> 제작자 로그인</span>
           <input value={loginForm.name} onChange={(event) => setLoginForm({ ...loginForm, name: event.target.value })} placeholder="이름" />
           <PasswordField value={loginForm.passcode} onChange={(value) => setLoginForm({ ...loginForm, passcode: value })} visible={visiblePasswords.login} onToggle={() => togglePassword("login")} placeholder="숫자 8자리 비밀번호" />
           <button className="primary" type="submit">제작실 입장</button>
@@ -574,7 +575,7 @@ function CompactAuthPanel(props) {
       )}
       {authMode === "forgot" && (
         <form className="auth-form compact" onSubmit={onForgotRequest}>
-          <span className="eyebrow"><KeyRound size={16} /> 비밀번호 찾기</span>
+          <span className="eyebrow"><KeyRound size={16} /> 제작자 비밀번호 찾기</span>
           <p>요청을 보낸 제작자의 비밀번호만 주 제작자가 확인할 수 있습니다.</p>
           <input value={forgotName} onChange={(event) => setForgotName(event.target.value)} placeholder="신청한 이름" />
           <button className="primary" type="submit">확인 요청 보내기</button>
