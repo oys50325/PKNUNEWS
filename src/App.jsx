@@ -56,7 +56,7 @@ export default function App() {
   const [isDraggingPdf, setIsDraggingPdf] = useState(false);
   const [query, setQuery] = useState("");
   const [editingIssueId, setEditingIssueId] = useState(null);
-  const [editIssueForm, setEditIssueForm] = useState({ title: "", keywords: Array(10).fill("") });
+  const [editIssueForm, setEditIssueForm] = useState({ title: "", monthLabel: "", keywords: Array(10).fill("") });
 
   const isAdmin = session?.role === "admin";
   const canApproveUsers = session?.role === "admin" || session?.role === "subadmin";
@@ -272,7 +272,7 @@ export default function App() {
     try {
       const keywords = cleanKeywords(extracted.keywords);
       const keywordTargets = buildKeywordTargets(extracted.pages, keywords);
-      await publishIssue({ ...extracted, title: extracted.title.trim() || "PS1 NEWS LETTER", keywords, keywordTargets });
+      await publishIssue({ ...extracted, title: extracted.title.trim() || "PS1 NEWS LETTER", monthLabel: normalizeMonthLabel(extracted.monthLabel), keywords, keywordTargets });
       setExtracted(null);
       await refreshIssues();
       setStatus("게재가 완료되었습니다. 공개 뉴스레터 화면에 반영됩니다.");
@@ -287,6 +287,10 @@ export default function App() {
     setExtracted((current) => (current ? { ...current, title: value } : current));
   }
 
+  function updateExtractedMonth(value) {
+    setExtracted((current) => (current ? { ...current, monthLabel: value } : current));
+  }
+
   function updateExtractedKeyword(index, value) {
     setExtracted((current) => {
       if (!current) return current;
@@ -298,12 +302,12 @@ export default function App() {
 
   function startEditIssue(issue) {
     setEditingIssueId(issue.id);
-    setEditIssueForm({ title: issue.title || "", keywords: normalizeKeywordInputs(issue.keywords) });
+    setEditIssueForm({ title: issue.title || "", monthLabel: issue.monthLabel || "", keywords: normalizeKeywordInputs(issue.keywords) });
   }
 
   function cancelEditIssue() {
     setEditingIssueId(null);
-    setEditIssueForm({ title: "", keywords: Array(10).fill("") });
+    setEditIssueForm({ title: "", monthLabel: "", keywords: Array(10).fill("") });
   }
 
   function updateEditKeyword(index, value) {
@@ -319,18 +323,19 @@ export default function App() {
     setIsBusy(true);
     try {
       const nextTitle = editIssueForm.title.trim() || issue.title;
+      const nextMonthLabel = normalizeMonthLabel(editIssueForm.monthLabel || issue.monthLabel);
       const keywords = cleanKeywords(editIssueForm.keywords);
       const keywordTargets = {
         ...filterKeywordTargets(issue.keywordTargets, keywords),
         ...buildKeywordTargets(issue.pages || [], keywords),
       };
-      await updateIssueMeta(issue.id, { title: nextTitle, keywords, keywordTargets });
-      setIssues((current) => current.map((item) => (item.id === issue.id ? { ...item, title: nextTitle, keywords, keywordTargets } : item)));
-      setActiveIssue((current) => (current?.id === issue.id ? { ...current, title: nextTitle, keywords, keywordTargets } : current));
+      await updateIssueMeta(issue.id, { title: nextTitle, monthLabel: nextMonthLabel, keywords, keywordTargets });
+      setIssues((current) => current.map((item) => (item.id === issue.id ? { ...item, title: nextTitle, monthLabel: nextMonthLabel, keywords, keywordTargets } : item)));
+      setActiveIssue((current) => (current?.id === issue.id ? { ...current, title: nextTitle, monthLabel: nextMonthLabel, keywords, keywordTargets } : current));
       cancelEditIssue();
-      setStatus("뉴스레터 제목과 핵심어를 저장했습니다.");
+      setStatus("뉴스레터 제목, 발행 월, 핵심어를 저장했습니다.");
       if (hasMissingKeywordTargets(keywordTargets, keywords) && issue.pages?.length) {
-        updateKeywordTargetsInBackground(issue.id, issue.pages, keywords, nextTitle, keywordTargets);
+        updateKeywordTargetsInBackground(issue.id, issue.pages, keywords, nextTitle, nextMonthLabel, keywordTargets);
       }
     } catch (error) {
       setStatus(`수정 실패: ${error.message}`);
@@ -350,7 +355,12 @@ export default function App() {
     }
   }
 
-  async function updateKeywordTargetsInBackground(issueId, pages, keywords, title, existingTargets = {}) {
+  function showLatestNewsletter() {
+    setActiveIssue(null);
+    scrollToElement("newsletter");
+  }
+
+  async function updateKeywordTargetsInBackground(issueId, pages, keywords, title, monthLabel, existingTargets = {}) {
     try {
       setStatus("저장은 완료되었습니다. 핵심어 위치 정보는 뒤에서 찾는 중입니다.");
       const ocrPages = await ensurePageOcr(pages, (message) => setStatus(message));
@@ -358,9 +368,9 @@ export default function App() {
         ...filterKeywordTargets(existingTargets, keywords),
         ...buildKeywordTargets(ocrPages, keywords),
       };
-      await updateIssueMeta(issueId, { title, keywords, keywordTargets, pages: ocrPages });
-      setIssues((current) => current.map((item) => (item.id === issueId ? { ...item, keywords, keywordTargets, pages: ocrPages } : item)));
-      setActiveIssue((current) => (current?.id === issueId ? { ...current, keywords, keywordTargets, pages: ocrPages } : current));
+      await updateIssueMeta(issueId, { title, monthLabel, keywords, keywordTargets, pages: ocrPages });
+      setIssues((current) => current.map((item) => (item.id === issueId ? { ...item, monthLabel, keywords, keywordTargets, pages: ocrPages } : item)));
+      setActiveIssue((current) => (current?.id === issueId ? { ...current, monthLabel, keywords, keywordTargets, pages: ocrPages } : current));
       setStatus(hasMissingKeywordTargets(keywordTargets, keywords) ? "OCR은 완료되었지만 일부 핵심어 위치는 찾지 못했습니다." : "핵심어 위치 정보까지 갱신했습니다.");
     } catch (error) {
       setStatus(`저장은 완료되었지만 핵심어 위치 찾기는 실패했습니다: ${error.message}`);
@@ -393,7 +403,7 @@ export default function App() {
           </span>
         </a>
         <nav>
-          <button className="nav-button" type="button" onClick={() => scrollToElement("newsletter")}>뉴스레터</button>
+          <button className="nav-button" type="button" onClick={showLatestNewsletter}>뉴스레터</button>
           <button className="nav-button" type="button" onClick={() => scrollToElement("archive")}>지난 뉴스레터 보기</button>
           {canUseStudio && <button className="nav-button" type="button" onClick={() => scrollToElement("studio")}>제작실</button>}
           {session ? (
@@ -450,6 +460,7 @@ export default function App() {
                 editingIssueId === issue.id ? (
                   <div className="issue-edit">
                     <input value={editIssueForm.title} onChange={(event) => setEditIssueForm({ ...editIssueForm, title: event.target.value })} placeholder="뉴스레터 제목" />
+                    <input value={editIssueForm.monthLabel} onChange={(event) => setEditIssueForm({ ...editIssueForm, monthLabel: event.target.value })} placeholder="발행 월 예: 2026년 6월" />
                     <KeywordInputs keywords={editIssueForm.keywords} onChange={updateEditKeyword} compact />
                     <div className="issue-edit-actions">
                       <button type="button" onClick={() => handleUpdateIssueMeta(issue)} disabled={isBusy}>저장</button>
@@ -502,6 +513,10 @@ export default function App() {
                     <label>
                       <span>뉴스레터 제목</span>
                       <input value={extracted.title} onChange={(event) => updateExtractedTitle(event.target.value)} placeholder="뉴스레터 제목" />
+                    </label>
+                    <label>
+                      <span>발행 월</span>
+                      <input value={extracted.monthLabel} onChange={(event) => updateExtractedMonth(event.target.value)} placeholder="예: 2026년 6월" />
                     </label>
                     <label>
                       <span>주요이슈 핵심어 최대 10개</span>
@@ -887,6 +902,10 @@ function guessEdition(fileName) {
 
 function guessMonthLabel() {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long" }).format(new Date());
+}
+
+function normalizeMonthLabel(value) {
+  return String(value || "").trim() || guessMonthLabel();
 }
 
 function createWelcomeIssue() {

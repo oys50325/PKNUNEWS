@@ -138,6 +138,7 @@ export async function publishIssue(issue) {
 export async function updateIssueMeta(issueId, meta) {
   const payload = stripUndefined({
     title: meta.title,
+    monthLabel: meta.monthLabel,
     keywords: normalizeKeywords(meta.keywords),
     keywordTargets: meta.keywordTargets || {},
     updatedAt: new Date().toISOString(),
