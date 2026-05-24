@@ -318,15 +318,20 @@ export default function App() {
     if (!canUseStudio) return;
     setIsBusy(true);
     try {
+      const nextTitle = editIssueForm.title.trim() || issue.title;
       const keywords = cleanKeywords(editIssueForm.keywords);
-      setStatus("핵심어가 있는 PDF 페이지를 찾는 중입니다. 기존 뉴스레터는 OCR 시간이 조금 걸릴 수 있습니다.");
-      const pages = await ensurePageOcr(issue.pages || [], (message) => setStatus(message));
-      const keywordTargets = buildKeywordTargets(pages, keywords);
-      await updateIssueMeta(issue.id, { title: editIssueForm.title.trim() || issue.title, keywords, keywordTargets });
-      await refreshIssues();
-      setActiveIssue((current) => (current?.id === issue.id ? { ...current, title: editIssueForm.title.trim() || issue.title, keywords, keywordTargets } : current));
+      const keywordTargets = {
+        ...filterKeywordTargets(issue.keywordTargets, keywords),
+        ...buildKeywordTargets(issue.pages || [], keywords),
+      };
+      await updateIssueMeta(issue.id, { title: nextTitle, keywords, keywordTargets });
+      setIssues((current) => current.map((item) => (item.id === issue.id ? { ...item, title: nextTitle, keywords, keywordTargets } : item)));
+      setActiveIssue((current) => (current?.id === issue.id ? { ...current, title: nextTitle, keywords, keywordTargets } : current));
       cancelEditIssue();
-      setStatus("뉴스레터 제목과 핵심어를 수정했습니다.");
+      setStatus("뉴스레터 제목과 핵심어를 저장했습니다.");
+      if (hasMissingKeywordTargets(keywordTargets, keywords) && issue.pages?.length) {
+        updateKeywordTargetsInBackground(issue.id, issue.pages, keywords, nextTitle);
+      }
     } catch (error) {
       setStatus(`수정 실패: ${error.message}`);
     } finally {
@@ -342,6 +347,20 @@ export default function App() {
     } else {
       window.setTimeout(() => scrollToElement("newsletter"), 140);
       setStatus(`'${keyword}' 핵심어의 페이지 위치가 아직 없습니다. 제목/핵심어 수정을 저장하면 OCR로 위치를 찾습니다.`);
+    }
+  }
+
+  async function updateKeywordTargetsInBackground(issueId, pages, keywords, title) {
+    try {
+      setStatus("저장은 완료되었습니다. 핵심어 위치 정보는 뒤에서 찾는 중입니다.");
+      const ocrPages = await ensurePageOcr(pages, (message) => setStatus(message));
+      const keywordTargets = buildKeywordTargets(ocrPages, keywords);
+      await updateIssueMeta(issueId, { title, keywords, keywordTargets });
+      setIssues((current) => current.map((item) => (item.id === issueId ? { ...item, keywords, keywordTargets } : item)));
+      setActiveIssue((current) => (current?.id === issueId ? { ...current, keywords, keywordTargets } : current));
+      setStatus("핵심어 위치 정보까지 갱신했습니다.");
+    } catch (error) {
+      setStatus(`저장은 완료되었지만 핵심어 위치 찾기는 실패했습니다: ${error.message}`);
     }
   }
 
@@ -777,6 +796,22 @@ function buildKeywordTargets(pages = [], keywords = []) {
     }
     return targets;
   }, {});
+}
+
+function filterKeywordTargets(targets = {}, keywords = []) {
+  return cleanKeywords(keywords).reduce((next, keyword) => {
+    const normalizedKeyword = normalizeForSearch(keyword);
+    const targetPage = targets[keyword] || targets[normalizedKeyword];
+    if (targetPage) {
+      next[keyword] = targetPage;
+      next[normalizedKeyword] = targetPage;
+    }
+    return next;
+  }, {});
+}
+
+function hasMissingKeywordTargets(targets = {}, keywords = []) {
+  return cleanKeywords(keywords).some((keyword) => !targets[keyword] && !targets[normalizeForSearch(keyword)]);
 }
 
 function validatePasscodePair(passcode, confirmPasscode) {
