@@ -144,18 +144,23 @@ export async function updateIssueMeta(issueId, meta) {
   });
 
   if (realtimeDatabaseReady) {
-    await patchRealtime(`newsletters/${issueId}`, payload);
+    const ocrPayload = Object.fromEntries(
+      (meta.pages || [])
+        .map((page, index) => [`pages/${index}/ocrText`, page.ocrText || ""])
+        .filter(([, text]) => text),
+    );
+    await patchRealtime(`newsletters/${issueId}`, { ...payload, ...ocrPayload });
     return;
   }
 
   if (!firebaseReady) {
-    const next = readLocalIssues().map((issue) => (issue.id === issueId ? { ...issue, ...payload } : issue));
+    const next = readLocalIssues().map((issue) => (issue.id === issueId ? { ...issue, ...payload, pages: meta.pages || issue.pages } : issue));
     localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
     return;
   }
 
   const { db, firestoreApi } = await getServices();
-  await firestoreApi.updateDoc(firestoreApi.doc(db, "newsletters", issueId), payload);
+  await firestoreApi.updateDoc(firestoreApi.doc(db, "newsletters", issueId), stripUndefined({ ...payload, pages: meta.pages }));
 }
 
 export async function removeIssue(issue) {

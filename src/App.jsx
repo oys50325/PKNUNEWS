@@ -330,7 +330,7 @@ export default function App() {
       cancelEditIssue();
       setStatus("뉴스레터 제목과 핵심어를 저장했습니다.");
       if (hasMissingKeywordTargets(keywordTargets, keywords) && issue.pages?.length) {
-        updateKeywordTargetsInBackground(issue.id, issue.pages, keywords, nextTitle);
+        updateKeywordTargetsInBackground(issue.id, issue.pages, keywords, nextTitle, keywordTargets);
       }
     } catch (error) {
       setStatus(`수정 실패: ${error.message}`);
@@ -350,15 +350,18 @@ export default function App() {
     }
   }
 
-  async function updateKeywordTargetsInBackground(issueId, pages, keywords, title) {
+  async function updateKeywordTargetsInBackground(issueId, pages, keywords, title, existingTargets = {}) {
     try {
       setStatus("저장은 완료되었습니다. 핵심어 위치 정보는 뒤에서 찾는 중입니다.");
       const ocrPages = await ensurePageOcr(pages, (message) => setStatus(message));
-      const keywordTargets = buildKeywordTargets(ocrPages, keywords);
-      await updateIssueMeta(issueId, { title, keywords, keywordTargets });
-      setIssues((current) => current.map((item) => (item.id === issueId ? { ...item, keywords, keywordTargets } : item)));
-      setActiveIssue((current) => (current?.id === issueId ? { ...current, keywords, keywordTargets } : current));
-      setStatus("핵심어 위치 정보까지 갱신했습니다.");
+      const keywordTargets = {
+        ...filterKeywordTargets(existingTargets, keywords),
+        ...buildKeywordTargets(ocrPages, keywords),
+      };
+      await updateIssueMeta(issueId, { title, keywords, keywordTargets, pages: ocrPages });
+      setIssues((current) => current.map((item) => (item.id === issueId ? { ...item, keywords, keywordTargets, pages: ocrPages } : item)));
+      setActiveIssue((current) => (current?.id === issueId ? { ...current, keywords, keywordTargets, pages: ocrPages } : current));
+      setStatus(hasMissingKeywordTargets(keywordTargets, keywords) ? "OCR은 완료되었지만 일부 핵심어 위치는 찾지 못했습니다." : "핵심어 위치 정보까지 갱신했습니다.");
     } catch (error) {
       setStatus(`저장은 완료되었지만 핵심어 위치 찾기는 실패했습니다: ${error.message}`);
     }
